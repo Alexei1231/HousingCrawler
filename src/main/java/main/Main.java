@@ -1,24 +1,21 @@
 package main;
 
-import java.io.FileWriter;
+import java.io.*;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.NoSuchElementException;
-import java.util.Scanner;
+import java.util.*;
+
+import com.google.gson.*;
+import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.openqa.selenium.By;
 import org.openqa.selenium.JavascriptExecutor;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
 import org.openqa.selenium.edge.EdgeDriver;
-
-
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
-
-
-import java.io.IOException;
 
 
 public class Main {
@@ -56,18 +53,27 @@ public class Main {
             //Automatic scrolling and buttonpressing
         while (true) {
             js.executeScript("window.scrollTo(0, document.body.scrollHeight);");
-            Thread.sleep(5000); // подожди, пока подгрузится
+            Thread.sleep(5000); // waiting until loaded
 
             long newHeight = (long) js.executeScript("return document.body.scrollHeight");
             if (newHeight == lastHeight) {
-                // Пробуем найти кнопку "Load more results"
+                // Trying to find "Load More Results button"
                 List<WebElement> buttons = driver.findElements(By.xpath("//button[span[text()='Load more results']]"));
                 if (!buttons.isEmpty()) {
+                    try{
                     buttons.get(0).click();
-                    Thread.sleep(2000);
+                    }
+                    catch(Exception e){
+                        break;
+                    }
+                    try {
+                        Thread.sleep(2000);
+                    }catch(Exception e){
+                        Thread.sleep(5000);
+                    }
                 } else {
                     System.out.println("Prosli jsme vsemi nabidkami. Zacina se ulozeni do souboru");
-                    break; // кнопки нет — выходим из цикла
+                    break;
                 }
             }
 
@@ -99,6 +105,52 @@ String url = card.findElement(By.cssSelector("[data-testid=\"title-link\"]")).ge
         }
 
         System.out.println("Hotovo! Mame " + results.size() + " nabidek v booking_results.json");
+
+
+        Reader reader = new FileReader("booking_results.json");
+        JsonArray jsonArray = JsonParser.parseReader(reader).getAsJsonArray();
+
+        // Создание Excel файла
+        Workbook workbook = new XSSFWorkbook();
+        Sheet sheet = workbook.createSheet("Listings");
+
+        // Запись заголовков
+        Row headerRow = sheet.createRow(0);
+        Set<String> headers = new LinkedHashSet<>();
+
+        // Соберём заголовки из первого элемента
+        if (jsonArray.size() > 0) {
+            JsonObject firstObj = jsonArray.get(0).getAsJsonObject();
+            headers.addAll(firstObj.keySet());
+        }
+
+        int colIdx = 0;
+        for (String header : headers) {
+            headerRow.createCell(colIdx++).setCellValue(header);
+        }
+
+        // Запись данных
+        int rowIdx = 1;
+        for (JsonElement elem : jsonArray) {
+            JsonObject obj = elem.getAsJsonObject();
+            Row row = sheet.createRow(rowIdx++);
+            colIdx = 0;
+            for (String header : headers) {
+                Cell cell = row.createCell(colIdx++);
+                JsonElement value = obj.get(header);
+                if (value != null && !value.isJsonNull()) {
+                    cell.setCellValue(value.getAsString());
+                }
+            }
+        }
+
+        // Сохранение
+        FileOutputStream out = new FileOutputStream("output.xlsx");
+        workbook.write(out);
+        out.close();
+        workbook.close();
+
+        System.out.println("Excel файл успешно создан: output.xlsx");
     }
 
 
