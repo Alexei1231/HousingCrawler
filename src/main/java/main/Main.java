@@ -22,13 +22,13 @@ import java.io.IOException;
 public class Main {
     static class Listing {
         String title;
-        String price;
-        String link;
+        //String price;
+        //String link;
 
-        public Listing(String title, String price, String link) {
+        public Listing(String title ) {
             this.title = title;
-            this.price = price;
-            this.link = link;
+            //this.price = price;
+            //this.link = link;
         }
     }
 
@@ -50,16 +50,16 @@ public class Main {
         Thread.sleep(5000);
 
         // Получаем карточки предложений
-        List<WebElement> cards = driver.findElements(By.cssSelector("div[data-testid='property-card']"));
+        List<WebElement> cards = driver.findElements(By.cssSelector("div[data-testid=\"property-card\"]"));
         List<Listing> results = new ArrayList<>();
 
         for (WebElement card : cards) {
             try {
-                String title = card.findElement(By.cssSelector("div[data-testid='title']")).getText();
-                String price = card.findElement(By.cssSelector("span[data-testid='price-and-discounted-price']")).getText();
-                String url = card.findElement(By.cssSelector("a[data-testid='title-link']")).getAttribute("href");
+                String title = card.findElement(By.cssSelector("[data-testid=\"title\"]")).getText();
+                //String price = card.findElement(By.cssSelector("[data-testid=\"price-and-discounted-price\"]")).getText();
+//String url = card.findElement(By.cssSelector("[data-testid=\"title-link\"]")).getAttribute("href");
 
-                results.add(new Listing(title, price, url));
+                results.add(new Listing(title));
             } catch (Exception e) {
                 // Если у карточки чего-то не хватает — пропускаем
                 continue;
