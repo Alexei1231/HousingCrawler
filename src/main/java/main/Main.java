@@ -6,15 +6,18 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Scanner;
+import org.openqa.selenium.By;
+import org.openqa.selenium.WebDriver;
+import org.openqa.selenium.WebElement;
+import org.openqa.selenium.edge.EdgeDriver;
+
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-import org.jsoup.Jsoup;
-import org.jsoup.nodes.Document;
-import org.jsoup.nodes.Element;
-import org.jsoup.select.Elements;
+
 
 import java.io.IOException;
+
 
 public class Main {
     static class Listing {
@@ -30,67 +33,49 @@ public class Main {
     }
 
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws IOException, InterruptedException {
         Scanner scanner = new Scanner(System.in);
-        System.out.print("Napiste nazev mesta v anglictine(tr. Prague): ");
+        System.out.print("Napiste mesto v anglictine (napr. Prague): ");
         String city = scanner.nextLine().trim();
 
-        String seedUrl = "https://www.booking.com/searchresults.html";//target webpage
+        // HTML forming
+        String searchUrl = "https://www.booking.com/searchresults.html?ss=" +
+                URLEncoder.encode(city, StandardCharsets.UTF_8);
 
-        seedUrl += "?ss=" + URLEncoder.encode(city, StandardCharsets.UTF_8); //adding the city to the
-        //targeted webpage
+        // Driver
+        WebDriver driver = new EdgeDriver();
+        driver.get(searchUrl);
 
-        Document doc = retrieveHTML(seedUrl);
+        // Даем странице загрузиться (можно настроить WebDriverWait)
+        Thread.sleep(5000);
 
-        if (doc != null) {
-            System.out.println("HTML successfully retrieved!");
+        // Получаем карточки предложений
+        List<WebElement> cards = driver.findElements(By.cssSelector("div[data-testid='property-card']"));
+        List<Listing> results = new ArrayList<>();
+
+        for (WebElement card : cards) {
+            try {
+                String title = card.findElement(By.cssSelector("div[data-testid='title']")).getText();
+                String price = card.findElement(By.cssSelector("span[data-testid='price-and-discounted-price']")).getText();
+                String url = card.findElement(By.cssSelector("a[data-testid='title-link']")).getAttribute("href");
+
+                results.add(new Listing(title, price, url));
+            } catch (Exception e) {
+                // Если у карточки чего-то не хватает — пропускаем
+                continue;
+            }
         }
-        Elements listings = doc.select("div[data-testid=property-card]");
-        ArrayList<Listing> results = new ArrayList<>();
 
-        for (Element listing : listings) {
-            String title = listing.selectFirst("div[data-testid=title]") != null
-                    ? listing.selectFirst("div[data-testid=title]").text()
-                    : "Není název";
+        driver.quit();
 
-            String price = listing.selectFirst("span[data-testid=price-and-discounted-price]") != null
-                    ? listing.selectFirst("span[data-testid=price-and-discounted-price]").text()
-                    : "Není cena";
-
-            String link = listing.selectFirst("a[data-testid=title-link]") != null
-                    ? "https://www.booking.com" + listing.selectFirst("a[data-testid=title-link]").attr("href").split("\\?")[0]
-                    : "Není link";
-
-            results.add(new Listing(title, price, link));
-        }
-
+        // Сохраняем в JSON
         Gson gson = new GsonBuilder().setPrettyPrinting().create();
-        try (FileWriter fileWriter = new FileWriter("results.json")) {
-            gson.toJson(results, fileWriter);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
+        try (FileWriter writer = new FileWriter("booking_results.json")) {
+            gson.toJson(results, writer);
         }
-        System.out.println("Готово! Найдено " + results.size() + " предложений.");
-        System.out.println("Результаты сохранены в results.json");
+
+        System.out.println("Hotovo! Mame " + results.size() + " nabidek v booking_results.json");
     }
 
-    private static Document retrieveHTML(String url) { //method which retrieves the whole HTML page
-        try {
-            // download HTML document using JSoup's connect class
-            Document doc = Jsoup.connect(url).userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
-                            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0 Safari/537.36")
-                    .timeout(10000).get();//complicated(rather then just .get) in
-            // order to bypass Booking anti-bot protection
 
-//            // log the HTML content
-//            System.out.println(doc.html());
-
-            // return the HTML document
-            return doc;
-        } catch (IOException e) {
-            // handle exceptions
-            System.err.println("Unable to fetch HTML of: " + url);
-        }
-        return null;
-    }
 }
