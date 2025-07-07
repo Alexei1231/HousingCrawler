@@ -5,8 +5,10 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.NoSuchElementException;
 import java.util.Scanner;
 import org.openqa.selenium.By;
+import org.openqa.selenium.JavascriptExecutor;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
 import org.openqa.selenium.edge.EdgeDriver;
@@ -23,19 +25,19 @@ public class Main {
     static class Listing {
         String title;
         //String price;
-        //String link;
+        String link;
 
-        public Listing(String title ) {
+        public Listing(String title, String link) {
             this.title = title;
             //this.price = price;
-            //this.link = link;
+            this.link = link;
         }
     }
 
 
     public static void main(String[] args) throws IOException, InterruptedException {
         Scanner scanner = new Scanner(System.in);
-        System.out.print("Napiste mesto v anglictine (napr. Prague): ");
+        System.out.print("Napiste mesto v anglictine (napr. Prague, Brno): ");
         String city = scanner.nextLine().trim();
 
         // HTML forming
@@ -46,10 +48,33 @@ public class Main {
         WebDriver driver = new EdgeDriver();
         driver.get(searchUrl);
 
-        // Даем странице загрузиться (можно настроить WebDriverWait)
+        //Page loading
         Thread.sleep(5000);
+        JavascriptExecutor js = (JavascriptExecutor) driver;
 
-        // Получаем карточки предложений
+        long lastHeight = (long) js.executeScript("return document.body.scrollHeight");
+            //Automatic scrolling and buttonpressing
+        while (true) {
+            js.executeScript("window.scrollTo(0, document.body.scrollHeight);");
+            Thread.sleep(5000); // подожди, пока подгрузится
+
+            long newHeight = (long) js.executeScript("return document.body.scrollHeight");
+            if (newHeight == lastHeight) {
+                // Пробуем найти кнопку "Load more results"
+                List<WebElement> buttons = driver.findElements(By.xpath("//button[span[text()='Load more results']]"));
+                if (!buttons.isEmpty()) {
+                    buttons.get(0).click();
+                    Thread.sleep(2000);
+                } else {
+                    System.out.println("Prosli jsme vsemi nabidkami. Zacina se ulozeni do souboru");
+                    break; // кнопки нет — выходим из цикла
+                }
+            }
+
+            lastHeight = newHeight;
+        }
+
+        // Accepting cards with offers
         List<WebElement> cards = driver.findElements(By.cssSelector("div[data-testid=\"property-card\"]"));
         List<Listing> results = new ArrayList<>();
 
@@ -57,18 +82,17 @@ public class Main {
             try {
                 String title = card.findElement(By.cssSelector("[data-testid=\"title\"]")).getText();
                 //String price = card.findElement(By.cssSelector("[data-testid=\"price-and-discounted-price\"]")).getText();
-//String url = card.findElement(By.cssSelector("[data-testid=\"title-link\"]")).getAttribute("href");
+String url = card.findElement(By.cssSelector("[data-testid=\"title-link\"]")).getAttribute("href");
 
-                results.add(new Listing(title));
+                results.add(new Listing(title, url));
             } catch (Exception e) {
-                // Если у карточки чего-то не хватает — пропускаем
                 continue;
             }
         }
 
         driver.quit();
 
-        // Сохраняем в JSON
+        // Saving with GSON
         Gson gson = new GsonBuilder().setPrettyPrinting().create();
         try (FileWriter writer = new FileWriter("booking_results.json")) {
             gson.toJson(results, writer);
