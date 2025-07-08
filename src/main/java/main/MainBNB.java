@@ -19,7 +19,7 @@ import org.openqa.selenium.WebElement;
 import org.openqa.selenium.edge.EdgeDriver;
 
 
-public class Main {
+public class MainBNB {
     static class Listing {//Internal class for listings
         String title;
         String address;
@@ -83,7 +83,7 @@ public class Main {
         List<WebElement> cards = new ArrayList<>();
         WebDriver driver = new EdgeDriver();
         try{
-         cards = bookingLookUp(city, driver);
+            cards = bookingLookUp(city, driver);
         }
         catch(Exception e){
             System.out.println("Doslo k chybe. Mozne jste uvedli spatne mesto");
