@@ -86,7 +86,7 @@ public class Main {
          cards = bookingLookUp(city, driver);
         }
         catch(Exception e){
-            System.out.println("Doslo k chybe. Mozne jste uvedli spatne mesto");
+            System.out.println("Doslo k chybe. Je mozne, ze jste uvedli spatne mesto");
             System.exit(0);
         }
         List<Listing> results = new ArrayList<>();
