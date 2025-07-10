@@ -14,6 +14,8 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class AirbnbCrawler {
     private EdgeDriver driver;
@@ -40,15 +42,60 @@ public class AirbnbCrawler {
 
             for (WebElement card : cards) {
                 try {
+                    //nazev
                     String title = card.findElement(By.cssSelector("[data-testid='listing-card-title']")).getText();
                     Listing listing = new Listing(title);
 
-                    // ⬇️ Zakomentovaný kód pro případné rozšíření:
-                    // listing.setRating(...);
-                    // listing.setReviewCount(...);
-                    // listing.setPricePerNight(...);
-                    // String listingUrl = card.findElement(By.cssSelector("a")).getAttribute("href");
-                    // ... přepínání tabů a detailní extrakce ...
+                    //cena za noc
+                    try {
+                        WebElement priceElem = card.findElement(By.xpath(".//div[@aria-hidden='true']//span[contains(text(), 'Kč')]"));
+                        String text = priceElem.getText(); // "734 Kč"
+                        String clean = text.replaceAll("[^0-9]", "");
+                        double pricePerNight = Double.parseDouble(clean);
+                        listing.setPricePerNight(pricePerNight);
+                    } catch (Exception e) {
+                        System.out.println("⚠️ Cena za noc nenalezena: " + e.getMessage());
+                    }
+//                    // Celková cena
+//                    List<WebElement> totalPriceElems = card.findElements(By.cssSelector("span[aria-hidden='true']"));
+//                    for (WebElement elem : totalPriceElems) {
+//                        String text = elem.getText();
+//                        if (text.contains("Kč")) {
+//                            listing.setTotalPrice(Long.parseLong(text));
+//                            break;
+//                        }
+//                    }
+
+                    // Hodnocení a počet recenzí
+                    try {
+                        WebElement ratingSpan = card.findElement(By.xpath(".//span[@aria-hidden='true' and contains(text(), '(')]"));
+                        String ratingText = ratingSpan.getText(); // např. "4,63 (17)"
+                        String[] parts = ratingText.split("[\\s\\(\\)]"); // ["4,63", "", "17", ""]
+
+                        String ratingStr = parts[0].replace(',', '.');  // změna čárky na tečku
+                        double rating = Double.parseDouble(ratingStr);
+                        int reviewsCount = Integer.parseInt(parts[2]);
+
+                        listing.setRating(rating);
+                        listing.setReviewCount(reviewsCount);
+                    } catch (NoSuchElementException e) {
+                        listing.setRating(0.0);
+                        listing.setReviewCount(0);
+                    }
+
+
+                    //Počet měsíců hostování - доделать
+                    String monthsText = card.findElement(By.cssSelector("div[aria-label*='Months hosting'] > div")).getText();
+                    listing.setMonthsHosting(Integer.parseInt(monthsText));
+
+                    // Superhost / Business host kontrola podle textu
+//                    String html = card.getAttribute("innerHTML");
+//                    listing.setSuperhost(html.contains("Superhost"));
+//                    listing.setBusinessHost(html.contains("Business host"));
+
+                    // Odkaz na detail nabídky
+                    String href = card.findElement(By.cssSelector("a[href*='/rooms/']")).getAttribute("href");
+                    listing.setUrl(href);
 
                     listings.add(listing);
                 } catch (Exception e) {
@@ -56,7 +103,7 @@ public class AirbnbCrawler {
                 }
             }
 
-            // ⬇️ Přechod na další stránku:
+            // Přechod na další stránku:
             List<WebElement> buttons = driver.findElements(By.xpath("//a[text()='" + pageNum + "']"));
             if (!buttons.isEmpty()) {
                 try {
@@ -72,7 +119,7 @@ public class AirbnbCrawler {
             }
         }
 
-        // ⬇️ Uložení JSON souboru na konci:
+        // Uložení JSON souboru na konci:
         com.google.gson.Gson gson = new com.google.gson.GsonBuilder().setPrettyPrinting().create();
         try (FileWriter writer = new FileWriter("airbnb_results.json")) {
             gson.toJson(listings, writer);

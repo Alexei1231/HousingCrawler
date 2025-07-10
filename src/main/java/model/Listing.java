@@ -14,6 +14,17 @@ public class Listing {
     private List<String> amenities;
     private String location;
     private double pricePerNight;
+    private String url;
+
+    public double getTotalPrice() {
+        return totalPrice;
+    }
+
+    public void setTotalPrice(double totalPrice) {
+        this.totalPrice = totalPrice;
+    }
+
+    private double totalPrice;
     private Host host;
 
     public Host getHost() {
@@ -118,5 +129,13 @@ public class Listing {
 
     public void setPricePerNight(double pricePerNight) {
         this.pricePerNight = pricePerNight;
+    }
+
+    public String getUrl() {
+        return url;
+    }
+
+    public void setUrl(String url) {
+        this.url = url;
     }
 }
