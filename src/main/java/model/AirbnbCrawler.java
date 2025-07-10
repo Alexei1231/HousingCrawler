@@ -85,8 +85,8 @@ public class AirbnbCrawler {
 
 
                     //Počet měsíců hostování - доделать
-                    String monthsText = card.findElement(By.cssSelector("div[aria-label*='Months hosting'] > div")).getText();
-                    listing.setMonthsHosting(Integer.parseInt(monthsText));
+                    //String monthsText = card.findElement(By.cssSelector("div[aria-label*='Months hosting'] > div")).getText();
+                    //listing.setMonthsHosting(Integer.parseInt(monthsText));
 
                     // Superhost / Business host kontrola podle textu
 //                    String html = card.getAttribute("innerHTML");
