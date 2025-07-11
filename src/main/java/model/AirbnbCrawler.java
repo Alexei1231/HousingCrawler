@@ -119,9 +119,7 @@ public class AirbnbCrawler {
                 break;
             }
 
-            for(WebElement card: cards){
 
-            }
         }
 
 
@@ -150,22 +148,82 @@ public class AirbnbCrawler {
         }
 
         try {
-            // Počkej, než se načte popis – můžeš upravit selektor
             WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(10));
-            try {//hledani zavreni pop-up okna
+
+            try {
+                // Pokus o zavření případného popup okna
                 WebElement closePopupButton = wait.until(ExpectedConditions.elementToBeClickable(
                         By.cssSelector("button[aria-label='Zavřít']"))
                 );
                 closePopupButton.click();
-                Thread.sleep(300); // malá prodleva, aby se DOM uklidnil
+                Thread.sleep(300);
             } catch (TimeoutException | NoSuchElementException ignored) {
-                // Popup se neobjevil – můžeme bezpečně pokračovat
             }
+
+            // Popis nabídky
             WebElement descElement = wait.until(ExpectedConditions.presenceOfElementLocated(
                     By.cssSelector("[data-section-id='DESCRIPTION_DEFAULT']"))
             );
             String description = descElement.getText().trim();
             listing.setDescription(description);
+
+            // Získání info položek
+            List<WebElement> infoItems = driver.findElements(By.cssSelector("ol.lgx66tx li"));
+
+            int guests = 0;
+            int bedrooms = 0;
+            int beds = 0;
+            int bathrooms = 0;
+
+            for (WebElement item : infoItems) {
+                String text = item.getText().toLowerCase().trim();
+
+                if (text.contains("hosté") || text.contains("hostů")) {
+                    Matcher matcher = Pattern.compile("(\\d+)\\s+host").matcher(text);
+                    if (matcher.find()) {
+                        guests = Integer.parseInt(matcher.group(1));
+                    }
+                }
+
+                if (text.contains("ložnic")) {
+                    Matcher matcher = Pattern.compile("(\\d+)\\s+ložnic").matcher(text);
+                    if (matcher.find()) {
+                        bedrooms = Integer.parseInt(matcher.group(1));
+                    }
+                } else if (text.contains("ložnice")) {
+                    Matcher matcher = Pattern.compile("(\\d+)\\s+ložnice").matcher(text);
+                    if (matcher.find()) {
+                        bedrooms = Integer.parseInt(matcher.group(1));
+                    }
+                } else if (text.contains("studio")) {
+                    bedrooms = 1;
+                }
+
+                if (text.matches(".*\\d+\\s+lůžk.*") || text.matches(".*\\d+\\s+postel.*")) {
+                    Matcher matcher = Pattern.compile("(\\d+)\\s+(lůžk|postel)").matcher(text);
+                    if (matcher.find()) {
+                        beds = Integer.parseInt(matcher.group(1));
+                    }
+                }
+
+                if (text.contains("koupelna")) {
+                    if (text.contains("sdílená")) {
+                        bathrooms = 0;
+                    } else {
+                        Matcher matcher = Pattern.compile("(\\d+)\\s+(soukromá\\s+)?koupelna").matcher(text);
+                        if (matcher.find()) {
+                            bathrooms = Integer.parseInt(matcher.group(1));
+                        } else {
+                            bathrooms = 1;
+                        }
+                    }
+                }
+            }
+
+            listing.setMaxGuests(guests);
+            listing.setBedrooms(bedrooms);
+            listing.setBeds(beds);
+            listing.setBathrooms(bathrooms);
 
         } catch (Exception e) {
             System.out.println("Nepodařilo se získat popis pro: " + url);
