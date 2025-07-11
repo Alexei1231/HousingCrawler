@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 public class AirbnbCrawler {
     private EdgeDriver driver;
@@ -96,7 +97,7 @@ public class AirbnbCrawler {
                     // Odkaz na detail nabídky
                     String href = card.findElement(By.cssSelector("a[href*='/rooms/']")).getAttribute("href");
                     listing.setUrl(href);
-
+                    crawlFromCard(driver, listing, href);
                     listings.add(listing);
                 } catch (Exception e) {
                     System.out.println("Chyba pri zpracovani karty: " + e.getMessage());
@@ -117,13 +118,76 @@ public class AirbnbCrawler {
                 System.out.println("Posledni stranka, ukonceni.");
                 break;
             }
+
+            for(WebElement card: cards){
+
+            }
         }
+
+
 
         // Uložení JSON souboru na konci:
         com.google.gson.Gson gson = new com.google.gson.GsonBuilder().setPrettyPrinting().create();
         try (FileWriter writer = new FileWriter("airbnb_results.json")) {
             gson.toJson(listings, writer);
             System.out.println("Ulozeno " + listings.size() + " nabidek do JSON.");
+        }
+    }
+
+    public void crawlFromCard(WebDriver driver, Listing listing, String url) {
+        String originalWindow = driver.getWindowHandle();
+
+        // Otevři novou záložku přes JavaScript
+        ((JavascriptExecutor) driver).executeScript("window.open(arguments[0])", url);
+
+        // Přepni na novou záložku
+        Set<String> allWindows = driver.getWindowHandles();
+        for (String windowHandle : allWindows) {
+            if (!windowHandle.equals(originalWindow)) {
+                driver.switchTo().window(windowHandle);
+                break;
+            }
+        }
+
+        try {
+            // Počkej, než se načte popis – můžeš upravit selektor
+            WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(10));
+            try {//hledani zavreni pop-up okna
+                WebElement closePopupButton = wait.until(ExpectedConditions.elementToBeClickable(
+                        By.cssSelector("button[aria-label='Zavřít']"))
+                );
+                closePopupButton.click();
+                Thread.sleep(300); // malá prodleva, aby se DOM uklidnil
+            } catch (TimeoutException | NoSuchElementException ignored) {
+                // Popup se neobjevil – můžeme bezpečně pokračovat
+            }
+            WebElement descElement = wait.until(ExpectedConditions.presenceOfElementLocated(
+                    By.cssSelector("[data-section-id='DESCRIPTION_DEFAULT']"))
+            );
+            String description = descElement.getText().trim();
+            listing.setDescription(description);
+
+        } catch (Exception e) {
+            System.out.println("Nepodařilo se získat popis pro: " + url);
+        } finally {
+            // Zavři záložku a vrať se zpět
+            driver.close();
+            driver.switchTo().window(originalWindow);
+        }
+    }
+
+    public void closePopupIfPresent() {
+        try {
+            WebElement closeButton = driver.findElement(By.cssSelector("button[aria-label='Zavřít']"));
+            if (closeButton.isDisplayed()) {
+                closeButton.click();
+                Thread.sleep(1000); // почекати закриття поп-апа
+                System.out.println("Pop-up byl zavren.");
+            }
+        } catch (NoSuchElementException e) {
+            System.out.println("Pop-up nebyl nalezen.");
+        } catch (InterruptedException e) {
+            e.printStackTrace();
         }
     }
 
