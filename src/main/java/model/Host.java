@@ -22,6 +22,10 @@ public class Host {
         this.profileUrl = profileUrl;
     }
 
+    public Host() {
+
+    }
+
     // Геттеры и сеттеры
     public String getName() {
         return name;

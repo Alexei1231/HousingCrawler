@@ -1,7 +1,5 @@
 package model;
 
-import java.util.List;
-
 public class Listing {
     private String title;
     private int maxGuests;
@@ -11,7 +9,6 @@ public class Listing {
     private double rating;
     private int reviewCount;
     private String description;
-    private List<String> amenities;
     private String location;
     private double pricePerNight;
     private String url;
@@ -105,14 +102,6 @@ public class Listing {
 
     public void setDescription(String description) {
         this.description = description;
-    }
-
-    public List<String> getAmenities() {
-        return amenities;
-    }
-
-    public void setAmenities(List<String> amenities) {
-        this.amenities = amenities;
     }
 
     public String getLocation() {

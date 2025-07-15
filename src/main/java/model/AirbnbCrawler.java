@@ -10,6 +10,7 @@ import org.openqa.selenium.support.ui.WebDriverWait;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.time.Duration;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -123,7 +124,6 @@ public class AirbnbCrawler {
         }
 
 
-
         // Uložení JSON souboru na konci:
         com.google.gson.Gson gson = new com.google.gson.GsonBuilder().setPrettyPrinting().create();
         try (FileWriter writer = new FileWriter("airbnb_results.json")) {
@@ -199,8 +199,8 @@ public class AirbnbCrawler {
                     bedrooms = 1;
                 }
 
-                if (text.matches(".*\\d+\\s+lůžk.*") || text.matches(".*\\d+\\s+postel.*")) {
-                    Matcher matcher = Pattern.compile("(\\d+)\\s+(lůžk|postel)").matcher(text);
+                if (text.matches(".*\\d+\\s+(postel|lůžk|manželská|jednolůžk|patrová|dvoulůžk|přistýlk).*")) {
+                    Matcher matcher = Pattern.compile("(\\d+)\\s+(postel|lůžk|manželská|jednolůžk|patrová|dvoulůžk|přistýlk)").matcher(text.toLowerCase());
                     if (matcher.find()) {
                         beds = Integer.parseInt(matcher.group(1));
                     }
@@ -225,6 +225,16 @@ public class AirbnbCrawler {
             listing.setBeds(beds);
             listing.setBathrooms(bathrooms);
 
+            //Host info (ze stejné stránky)
+//            Host host = new Host();
+//
+//            host.setAverageRating(listing.getRating());
+//            host.setReviewCount(listing.getReviewCount());
+//
+//            crawlHost(driver, host);
+//            listing.setHost(host);
+
+
         } catch (Exception e) {
             System.out.println("Nepodařilo se získat popis pro: " + url);
         } finally {
@@ -233,6 +243,50 @@ public class AirbnbCrawler {
             driver.switchTo().window(originalWindow);
         }
     }
+
+
+
+//    public void crawlHost(WebDriver driver, Host host) {
+//        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(10));
+//
+//        try {
+//            // Najdi kontejner s hostitelem
+//            WebElement hostSection = wait.until(ExpectedConditions.presenceOfElementLocated(
+//                    By.cssSelector("[data-section-id='HOST_OVERVIEW_DEFAULT']")));
+//
+//            //Jmeno hostitele
+//            WebElement nameElement = driver.findElement(By.xpath("//*[contains(text(),'Hostitelem je')]"));
+//            String name = nameElement.getText().replace("Hostitelem je", "").trim();
+//            host.setName(name);
+//
+//            // Superhostitel
+//            String hostSectionText = hostSection.getText().toLowerCase();
+//            host.setSuperhost(hostSectionText.contains("superhostitel"));
+//
+//            // Hosting since (např. "6 let hostí")
+//            Pattern pattern = Pattern.compile("(\\d+)\\s+let\\s+hostí");
+//            Matcher matcher = pattern.matcher(hostSectionText);
+//            if (matcher.find()) {
+//                int years = Integer.parseInt(matcher.group(1));
+//                host.setHostingSince(String.valueOf(LocalDate.now().minusYears(years)));
+//            }
+//
+//            // Profilový odkaz (obvykle na <button> je `aria-label` s jménem, ale není <a>)
+//            // Pokud chceš url profilu, můžeš si vytvořit vlastní z user ID (z URL obrázku):
+//            WebElement img = hostSection.findElement(By.tagName("img"));
+//            String imgUrl = img.getAttribute("src");
+//            Pattern idPattern = Pattern.compile("/user/([a-f0-9\\-]+)\\.jpg");
+//            Matcher idMatcher = idPattern.matcher(imgUrl);
+//            if (idMatcher.find()) {
+//                String userId = idMatcher.group(1);
+//                host.setProfileUrl("https://www.airbnb.com/users/show/" + userId);
+//            }
+//
+//        } catch (Exception e) {
+//            System.out.println("Nepodařilo se získat údaje o hostiteli.");
+//            e.printStackTrace();
+//        }
+//    }
 
     public void closePopupIfPresent() {
         try {
