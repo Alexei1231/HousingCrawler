@@ -241,15 +241,7 @@ public class AirbnbCrawler {
             driver.close();
             driver.switchTo().window(originalWindow);
         }
-        try {
-            xlsxConverter("airbnb_results.json");
-        } catch (FileNotFoundException e) {
-            throw new RuntimeException(e);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        } catch (InterruptedException e) {
-            throw new RuntimeException(e);
-        }
+
     }
 
 
@@ -399,52 +391,7 @@ public class AirbnbCrawler {
         }
     }
 
-    public static void xlsxConverter(String fileName) throws IOException, InterruptedException, FileNotFoundException { //Convert JSON to XLSX
-        Reader reader = new FileReader(fileName);//Opens the reader for file
-        JsonArray jsonArray = JsonParser.parseReader(reader).getAsJsonArray();
 
-        //Creates Excel-readable sheet
-        Workbook workbook = new XSSFWorkbook();
-        Sheet sheet = workbook.createSheet("Listings");
-
-        //Creates titles foe rows
-        Row headerRow = sheet.createRow(0);
-        Set<String> headers = new LinkedHashSet<>();
-
-        // Соберём заголовки из первого элемента
-        if (!jsonArray.isEmpty()) {
-            JsonObject firstObj = jsonArray.get(0).getAsJsonObject();
-            headers.addAll(firstObj.keySet());
-        }
-
-        int colIdx = 0;
-        for (String header : headers) {
-            headerRow.createCell(colIdx++).setCellValue(header);
-        }
-
-        // Запись данных
-        int rowIdx = 1;
-        for (JsonElement elem : jsonArray) {
-            JsonObject obj = elem.getAsJsonObject();
-            Row row = sheet.createRow(rowIdx++);
-            colIdx = 0;
-            for (String header : headers) {
-                Cell cell = row.createCell(colIdx++);
-                JsonElement value = obj.get(header);
-                if (value != null && !value.isJsonNull()) {
-                    cell.setCellValue(value.getAsString());
-                }
-            }
-        }
-
-        //Saving
-        FileOutputStream out = new FileOutputStream("output_bnb.xlsx");
-        workbook.write(out);
-        out.close();
-        workbook.close();
-
-        System.out.println("Excel soubor byl uspesne vytvoren: output_bnb.xlsx");
-    }
 
     public void closePopupIfPresent() {
         try {
