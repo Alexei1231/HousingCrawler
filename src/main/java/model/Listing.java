@@ -12,6 +12,7 @@ public class Listing {
     private String location;
     private double pricePerNight;
     private String url;
+    private String checkInDate;
 
     public double getTotalPrice() {
         return totalPrice;
@@ -126,5 +127,13 @@ public class Listing {
 
     public void setUrl(String url) {
         this.url = url;
+    }
+
+    public String getCheckInDate() {
+        return checkInDate;
+    }
+
+    public void setCheckInDate(String checkInDate) {
+        this.checkInDate = checkInDate;
     }
 }

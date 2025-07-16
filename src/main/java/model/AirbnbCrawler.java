@@ -168,6 +168,16 @@ public class AirbnbCrawler {
             String description = descElement.getText().trim();
             listing.setDescription(description);
 
+            // ✅ Získání check-in data
+            try {
+                WebElement checkInElement = driver.findElement(By.cssSelector("div[data-testid='change-dates-checkIn']"));
+                String checkInDate = checkInElement.getText().trim();
+                listing.setCheckInDate(checkInDate);
+            } catch (NoSuchElementException e) {
+                System.out.println("Check-in datum nebylo nalezeno.");
+            }
+
+
             // Získání info položek
             List<WebElement> infoItems = driver.findElements(By.cssSelector("ol.lgx66tx li"));
 
@@ -383,6 +393,8 @@ public class AirbnbCrawler {
                 System.out.println("Nepodařilo se získat URL profilu hostitele.");
                 e.printStackTrace();
             }
+
+
 
 
         } catch (Exception e) {
