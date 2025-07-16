@@ -82,10 +82,9 @@ public class Main {
 //        List<WebElement> cards = driver.findElements(By.cssSelector("div[data-testid=\"property-card\"]"));
         List<WebElement> cards = new ArrayList<>();
         WebDriver driver = new EdgeDriver();
-        try{
-         cards = bookingLookUp(city, driver);
-        }
-        catch(Exception e){
+        try {
+            cards = bookingLookUp(city, driver);
+        } catch (Exception e) {
             System.out.println("Doslo k chybe. Je mozne, ze jste uvedli spatne mesto");
             System.exit(0);
         }
@@ -168,7 +167,7 @@ public class Main {
 //        System.out.println("Excel soubor byl uspesne vytvoren: output.xlsx");
     }
 
-    public static List<WebElement>bookingLookUp(String city, WebDriver driver) throws InterruptedException { // searches for all listings on Booking in given location, then saves them to List
+    public static List<WebElement> bookingLookUp(String city, WebDriver driver) throws InterruptedException { // searches for all listings on Booking in given location, then saves them to List
         //HTML forming
         String searchUrl = "https://www.booking.com/searchresults.html?ss=" +
                 URLEncoder.encode(city, StandardCharsets.UTF_8);
@@ -207,7 +206,6 @@ public class Main {
 
             lastHeight = newHeight;
         }
-
 
 
         //Accepts cards with offers
@@ -255,12 +253,12 @@ public class Main {
         }
 
         //Saving
-        FileOutputStream out = new FileOutputStream("output.xlsx");
+        FileOutputStream out = new FileOutputStream("output_bnb.xlsx");
         workbook.write(out);
         out.close();
         workbook.close();
 
-        System.out.println("Excel soubor byl uspesne vytvoren: output.xlsx");
+        System.out.println("Excel soubor byl uspesne vytvoren: output_bnb.xlsx");
     }
 
 

@@ -19,6 +19,7 @@ public class MainBNB {
     public static void main(String[] args) throws InterruptedException, IOException {
         AirbnbCrawler crawler = new AirbnbCrawler();
         crawler.crawl();
+
     }
 
 }

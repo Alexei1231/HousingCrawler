@@ -1,20 +1,21 @@
 package model;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
+import com.google.gson.*;
+import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.openqa.selenium.*;
+import org.openqa.selenium.NoSuchElementException;
 import org.openqa.selenium.edge.EdgeDriver;
 import org.openqa.selenium.support.ui.ExpectedConditions;
 import org.openqa.selenium.support.ui.WebDriverWait;
 
-import java.io.FileWriter;
-import java.io.IOException;
+import java.io.*;
 import java.time.Duration;
 import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -226,13 +227,11 @@ public class AirbnbCrawler {
             listing.setBathrooms(bathrooms);
 
             //Host info (ze stejné stránky)
-//            Host host = new Host();
-//
-//            host.setAverageRating(listing.getRating());
-//            host.setReviewCount(listing.getReviewCount());
-//
-//            crawlHost(driver, host);
-//            listing.setHost(host);
+            Host host = new Host();
+
+
+            crawlHost(driver, host);
+            listing.setHost(host);
 
 
         } catch (Exception e) {
@@ -242,51 +241,210 @@ public class AirbnbCrawler {
             driver.close();
             driver.switchTo().window(originalWindow);
         }
+        try {
+            xlsxConverter("airbnb_results.json");
+        } catch (FileNotFoundException e) {
+            throw new RuntimeException(e);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
     }
 
 
+    public void crawlHost(WebDriver driver, Host host) {
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(10));
 
-//    public void crawlHost(WebDriver driver, Host host) {
-//        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(10));
-//
-//        try {
-//            // Najdi kontejner s hostitelem
-//            WebElement hostSection = wait.until(ExpectedConditions.presenceOfElementLocated(
-//                    By.cssSelector("[data-section-id='HOST_OVERVIEW_DEFAULT']")));
-//
-//            //Jmeno hostitele
-//            WebElement nameElement = driver.findElement(By.xpath("//*[contains(text(),'Hostitelem je')]"));
-//            String name = nameElement.getText().replace("Hostitelem je", "").trim();
-//            host.setName(name);
-//
-//            // Superhostitel
-//            String hostSectionText = hostSection.getText().toLowerCase();
-//            host.setSuperhost(hostSectionText.contains("superhostitel"));
-//
-//            // Hosting since (např. "6 let hostí")
-//            Pattern pattern = Pattern.compile("(\\d+)\\s+let\\s+hostí");
-//            Matcher matcher = pattern.matcher(hostSectionText);
-//            if (matcher.find()) {
-//                int years = Integer.parseInt(matcher.group(1));
-//                host.setHostingSince(String.valueOf(LocalDate.now().minusYears(years)));
-//            }
-//
-//            // Profilový odkaz (obvykle na <button> je `aria-label` s jménem, ale není <a>)
-//            // Pokud chceš url profilu, můžeš si vytvořit vlastní z user ID (z URL obrázku):
-//            WebElement img = hostSection.findElement(By.tagName("img"));
-//            String imgUrl = img.getAttribute("src");
-//            Pattern idPattern = Pattern.compile("/user/([a-f0-9\\-]+)\\.jpg");
-//            Matcher idMatcher = idPattern.matcher(imgUrl);
-//            if (idMatcher.find()) {
-//                String userId = idMatcher.group(1);
-//                host.setProfileUrl("https://www.airbnb.com/users/show/" + userId);
-//            }
-//
-//        } catch (Exception e) {
-//            System.out.println("Nepodařilo se získat údaje o hostiteli.");
-//            e.printStackTrace();
-//        }
-//    }
+        try {
+            // Sekce s hostitelem
+            WebElement hostSection = wait.until(ExpectedConditions.presenceOfElementLocated(
+                    By.cssSelector("[data-section-id='MEET_YOUR_HOST']")));
+
+            // Jméno hostitele
+            try {
+                WebElement nameElement = driver.findElement(By.xpath(
+                        "//*[contains(text(),'Hostitelem je') or contains(text(),'Ubytuj se u')]"
+                ));
+                String nameText = nameElement.getText().trim();
+                String name = "";
+
+                // Zjistit, jaká fráze byla použita, a extrahovat jméno
+                if (nameText.startsWith("Hostitelem je")) {
+                    name = nameText.replace("Hostitelem je", "").trim();
+                } else if (nameText.startsWith("Ubytuj se u")) {
+                    // Např. "Ubytuj se u hostitele Msm"
+                    Pattern namePattern = Pattern.compile("Ubytuj se u\\s+(?:hostitele\\s+)?(.+)");
+                    Matcher matcher = namePattern.matcher(nameText);
+                    if (matcher.find()) {
+                        name = matcher.group(1).trim();
+                    }
+                }
+
+                if (!name.isEmpty()) {
+                    host.setName(name);
+                } else {
+                    System.out.println("Nepodařilo se extrahovat jméno hostitele.");
+                }
+            } catch (NoSuchElementException e) {
+                System.out.println("Jméno hostitele nebylo nalezeno.");
+            }
+
+            // Text celé sekce pro analýzu
+            String hostSectionText = hostSection.getText().toLowerCase();
+
+            // Superhostitel
+            host.setSuperhost(hostSectionText.contains("superhostitel"));
+
+            // Délka hostování – např. "6 let hostí"
+            Pattern pattern = Pattern.compile("(\\d+)\\s+(rok(?:y)?|let|měsíc(?:e)?|měsíce)\\s+hostí");
+            Matcher matcher = pattern.matcher(hostSectionText);
+            if (matcher.find()) {
+                int number = Integer.parseInt(matcher.group(1));
+                String unit = matcher.group(2);
+
+                if (unit.matches("(?i)rok(?:y|ů)?|let")) {
+                    host.setHostingSince(String.valueOf(LocalDate.now().minusYears(number)));
+                } else if (unit.matches("(?i)měsíc(?:e|ů)?")) {
+                    host.setHostingSince(String.valueOf(LocalDate.now().minusMonths(number)));
+                }
+
+            }
+
+
+            // ✅ Odpovědní index a doba reakce
+            try {
+                String fullText = hostSection.getText();
+
+                // Robustní hledání: index odpovědí
+                Pattern responseRatePattern = Pattern.compile("index\\s*odpovědí\\s*[:：]\\s*(\\d{1,3})\\s*%", Pattern.CASE_INSENSITIVE);
+                Matcher responseRateMatcher = responseRatePattern.matcher(fullText);
+                if (responseRateMatcher.find()) {
+                    host.setResponseRate(responseRateMatcher.group(1));
+                }
+
+                // Robustní hledání: doba reakce
+                Pattern responseTimePattern = Pattern.compile("reaguje během ([^\\n]+)", Pattern.CASE_INSENSITIVE);
+                Matcher responseTimeMatcher = responseTimePattern.matcher(fullText);
+                if (responseTimeMatcher.find()) {
+                    String responseTime = "Reaguje během " + responseTimeMatcher.group(1).trim();
+                    host.setResponseTime(responseTime);
+                }
+
+            } catch (Exception e) {
+                System.out.println("Nepodařilo se získat odpovědní informace o hostiteli z textu.");
+                e.printStackTrace();
+            }
+
+
+            // ✅ URL profilu z <a>
+            try {
+                // Hledej <a> elementy a najdi první s odkazem na profil
+                List<WebElement> links = driver.findElements(By.tagName("a"));
+                for (WebElement link : links) {
+                    String href = link.getAttribute("href");
+                    if (href != null && href.contains("/users/show/")) {
+                        host.setProfileUrl(href.startsWith("http") ? href : "https://www.airbnb.com" + href);
+                        break;
+                    }
+                }
+
+                // Fallback: pokud URL není nalezena, zkus z <img>
+                if (host.getProfileUrl() == null) {
+                    try {
+                        WebElement img = hostSection.findElement(By.tagName("img"));
+                        String imgUrl = img.getAttribute("src");
+                        Pattern idPattern = Pattern.compile("/user/(\\d+|[a-f0-9\\-]+)\\.jpg");
+                        Matcher idMatcher = idPattern.matcher(imgUrl);
+                        if (idMatcher.find()) {
+                            String userId = idMatcher.group(1);
+                            host.setProfileUrl("https://www.airbnb.com/users/show/" + userId);
+                        }
+                    } catch (Exception ignore) {
+                        System.out.println("Nepodařilo se získat URL profilu ani z obrázku.");
+                    }
+                }
+
+                try {
+                    // Najdi počet recenzí – např. "255 hodnocení"
+                    Pattern reviewsPattern = Pattern.compile("(\\d+)\\s*hodnocení");
+                    Matcher reviewsMatcher = reviewsPattern.matcher(hostSectionText);
+                    if (reviewsMatcher.find()) {
+                        int reviewCount = Integer.parseInt(reviewsMatcher.group(1));
+                        host.setReviewCount(reviewCount);
+                    }
+
+                    // Najdi průměrné hodnocení – např. "průměrné hodnocení 4,64 z 5"
+                    Pattern ratingPattern = Pattern.compile("průměrné hodnocení\\s*([0-9.,]+)");
+                    Matcher ratingMatcher = ratingPattern.matcher(hostSectionText);
+                    if (ratingMatcher.find()) {
+                        double rating = Double.parseDouble(ratingMatcher.group(1).replace(",", "."));
+                        host.setAverageRating(rating);
+                    }
+                } catch (Exception e) {
+                    System.out.println("Nepodařilo se získat průměrné hodnocení nebo počet hodnocení hostitele:");
+                    e.printStackTrace();
+                }
+
+
+            } catch (Exception e) {
+                System.out.println("Nepodařilo se získat URL profilu hostitele.");
+                e.printStackTrace();
+            }
+
+
+        } catch (Exception e) {
+            System.out.println("Nepodařilo se získat údaje o hostiteli.");
+            e.printStackTrace();
+        }
+    }
+
+    public static void xlsxConverter(String fileName) throws IOException, InterruptedException, FileNotFoundException { //Convert JSON to XLSX
+        Reader reader = new FileReader(fileName);//Opens the reader for file
+        JsonArray jsonArray = JsonParser.parseReader(reader).getAsJsonArray();
+
+        //Creates Excel-readable sheet
+        Workbook workbook = new XSSFWorkbook();
+        Sheet sheet = workbook.createSheet("Listings");
+
+        //Creates titles foe rows
+        Row headerRow = sheet.createRow(0);
+        Set<String> headers = new LinkedHashSet<>();
+
+        // Соберём заголовки из первого элемента
+        if (!jsonArray.isEmpty()) {
+            JsonObject firstObj = jsonArray.get(0).getAsJsonObject();
+            headers.addAll(firstObj.keySet());
+        }
+
+        int colIdx = 0;
+        for (String header : headers) {
+            headerRow.createCell(colIdx++).setCellValue(header);
+        }
+
+        // Запись данных
+        int rowIdx = 1;
+        for (JsonElement elem : jsonArray) {
+            JsonObject obj = elem.getAsJsonObject();
+            Row row = sheet.createRow(rowIdx++);
+            colIdx = 0;
+            for (String header : headers) {
+                Cell cell = row.createCell(colIdx++);
+                JsonElement value = obj.get(header);
+                if (value != null && !value.isJsonNull()) {
+                    cell.setCellValue(value.getAsString());
+                }
+            }
+        }
+
+        //Saving
+        FileOutputStream out = new FileOutputStream("output_bnb.xlsx");
+        workbook.write(out);
+        out.close();
+        workbook.close();
+
+        System.out.println("Excel soubor byl uspesne vytvoren: output_bnb.xlsx");
+    }
 
     public void closePopupIfPresent() {
         try {
