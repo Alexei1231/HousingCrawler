@@ -2,6 +2,9 @@ package model;
 
 public class Listing {
     private String title;
+    private String checkInDate;
+    private double pricePerNightEur;
+    private String url;
     private int maxGuests;
     private int bedrooms;
     private int beds;
@@ -10,20 +13,18 @@ public class Listing {
     private int reviewCount;
     private String description;
     private String location;
-    private double pricePerNight;
-    private String url;
-    private String checkInDate;
 
-    public double getTotalPrice() {
-        return totalPrice;
-    }
-
-    public void setTotalPrice(double totalPrice) {
-        this.totalPrice = totalPrice;
-    }
-
-    private double totalPrice;
     private Host host;
+
+
+    public double getPricePerNightEur() {
+        return pricePerNightEur;
+    }
+
+    public void setPricePerNightEur(double pricePerNightEur) {
+        this.pricePerNightEur = pricePerNightEur;
+    }
+
 
     public Host getHost() {
         return host;
@@ -32,7 +33,6 @@ public class Listing {
     public void setHost(Host host) {
         this.host = host;
     }
-
 
 
     // Конструктор, геттеры и сеттеры
@@ -113,13 +113,13 @@ public class Listing {
         this.location = location;
     }
 
-    public double getPricePerNight() {
-        return pricePerNight;
-    }
-
-    public void setPricePerNight(double pricePerNight) {
-        this.pricePerNight = pricePerNight;
-    }
+//    //public double getPricePerNightCzk() {
+//        return pricePerNightCzk;
+//    }
+//
+//    public void setPricePerNightCzk(double pricePerNightCzk) {
+//        this.pricePerNightCzk = pricePerNightCzk;
+//    }
 
     public String getUrl() {
         return url;

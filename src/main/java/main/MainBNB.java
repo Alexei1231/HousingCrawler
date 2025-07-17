@@ -21,12 +21,10 @@ import org.openqa.selenium.support.ui.WebDriverWait;
 
 import java.io.*;
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 public class MainBNB {
+    static Scanner scanner = new Scanner(System.in);
     public static void main(String[] args) throws InterruptedException, IOException {
         AirbnbCrawler crawler = new AirbnbCrawler();
         crawler.crawl();

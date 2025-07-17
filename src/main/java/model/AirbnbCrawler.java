@@ -1,11 +1,5 @@
 package model;
 
-import com.google.gson.*;
-import org.apache.poi.ss.usermodel.Cell;
-import org.apache.poi.ss.usermodel.Row;
-import org.apache.poi.ss.usermodel.Sheet;
-import org.apache.poi.ss.usermodel.Workbook;
-import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.openqa.selenium.*;
 import org.openqa.selenium.NoSuchElementException;
 import org.openqa.selenium.edge.EdgeDriver;
@@ -18,11 +12,11 @@ import java.time.LocalDate;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 public class AirbnbCrawler {
     private EdgeDriver driver;
     private WebDriverWait wait;
+
 
     public AirbnbCrawler() {
         this.driver = new EdgeDriver();
@@ -30,7 +24,7 @@ public class AirbnbCrawler {
     }
 
     public void crawl() throws InterruptedException, IOException {
-        String searchUrl = "https://www.airbnb.cz/s/Praha/homes";
+        String searchUrl = "https://www.airbnb.cz/s/Praha/homes?currency=EUR";
         driver.get(searchUrl);
         Thread.sleep(5000);
 
@@ -55,7 +49,8 @@ public class AirbnbCrawler {
                         String text = priceElem.getText(); // "734 Kč"
                         String clean = text.replaceAll("[^0-9]", "");
                         double pricePerNight = Double.parseDouble(clean);
-                        listing.setPricePerNight(pricePerNight);
+                        listing.setPricePerNightEur(pricePerNight);
+
                     } catch (Exception e) {
                         System.out.println("⚠️ Cena za noc nenalezena: " + e.getMessage());
                     }
@@ -395,14 +390,11 @@ public class AirbnbCrawler {
             }
 
 
-
-
         } catch (Exception e) {
             System.out.println("Nepodařilo se získat údaje o hostiteli.");
             e.printStackTrace();
         }
     }
-
 
 
     public void closePopupIfPresent() {
