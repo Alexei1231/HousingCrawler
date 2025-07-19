@@ -114,4 +114,8 @@ public class Host {
     public void setResponseTime(String responseTime) {
         this.responseTime = responseTime;
     }
+
+    public void increaseNumberOfListings() {
+        numberOfListings++;
+    }
 }

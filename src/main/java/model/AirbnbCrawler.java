@@ -29,6 +29,7 @@ public class AirbnbCrawler {
         Thread.sleep(5000);
 
         List<Listing> listings = new ArrayList<>();
+        HashSet<Host> hosts = new HashSet<>();
         int pageNum = 2;
 
         while (true) {
@@ -45,8 +46,9 @@ public class AirbnbCrawler {
 
                     //cena za noc
                     try {
-                        WebElement priceElem = card.findElement(By.xpath(".//div[@aria-hidden='true']//span[contains(text(), 'Kč')]"));
-                        String text = priceElem.getText(); // "734 Kč"
+                        WebElement priceElem = card.findElement(By.xpath(".//div[@aria-hidden='true']//span[contains(text(), '€')]"));
+                        ;
+                        String text = priceElem.getText(); // "734 €"
                         String clean = text.replaceAll("[^0-9]", "");
                         double pricePerNight = Double.parseDouble(clean);
                         listing.setPricePerNightEur(pricePerNight);
@@ -54,15 +56,6 @@ public class AirbnbCrawler {
                     } catch (Exception e) {
                         System.out.println("⚠️ Cena za noc nenalezena: " + e.getMessage());
                     }
-//                    // Celková cena
-//                    List<WebElement> totalPriceElems = card.findElements(By.cssSelector("span[aria-hidden='true']"));
-//                    for (WebElement elem : totalPriceElems) {
-//                        String text = elem.getText();
-//                        if (text.contains("Kč")) {
-//                            listing.setTotalPrice(Long.parseLong(text));
-//                            break;
-//                        }
-//                    }
 
                     // Hodnocení a počet recenzí
                     try {
@@ -82,19 +75,11 @@ public class AirbnbCrawler {
                     }
 
 
-                    //Počet měsíců hostování - доделать
-                    //String monthsText = card.findElement(By.cssSelector("div[aria-label*='Months hosting'] > div")).getText();
-                    //listing.setMonthsHosting(Integer.parseInt(monthsText));
-
-                    // Superhost / Business host kontrola podle textu
-//                    String html = card.getAttribute("innerHTML");
-//                    listing.setSuperhost(html.contains("Superhost"));
-//                    listing.setBusinessHost(html.contains("Business host"));
 
                     // Odkaz na detail nabídky
                     String href = card.findElement(By.cssSelector("a[href*='/rooms/']")).getAttribute("href");
                     listing.setUrl(href);
-                    crawlFromCard(driver, listing, href);
+                    crawlFromCard(driver, listing, href, hosts);
                     listings.add(listing);
                 } catch (Exception e) {
                     System.out.println("Chyba pri zpracovani karty: " + e.getMessage());
@@ -118,8 +103,7 @@ public class AirbnbCrawler {
 
 
         }
-
-
+        numberOfListingsSearch(hosts, listings);
         // Uložení JSON souboru na konci:
         com.google.gson.Gson gson = new com.google.gson.GsonBuilder().setPrettyPrinting().create();
         try (FileWriter writer = new FileWriter("airbnb_results.json")) {
@@ -128,7 +112,7 @@ public class AirbnbCrawler {
         }
     }
 
-    public void crawlFromCard(WebDriver driver, Listing listing, String url) {
+    public void crawlFromCard(WebDriver driver, Listing listing, String url, HashSet<Host> hosts) {
         String originalWindow = driver.getWindowHandle();
 
         // Otevři novou záložku přes JavaScript
@@ -148,18 +132,14 @@ public class AirbnbCrawler {
 
             try {
                 // Pokus o zavření případného popup okna
-                WebElement closePopupButton = wait.until(ExpectedConditions.elementToBeClickable(
-                        By.cssSelector("button[aria-label='Zavřít']"))
-                );
+                WebElement closePopupButton = wait.until(ExpectedConditions.elementToBeClickable(By.cssSelector("button[aria-label='Zavřít']")));
                 closePopupButton.click();
-                Thread.sleep(300);
+                Thread.sleep(1500);
             } catch (TimeoutException | NoSuchElementException ignored) {
             }
 
             // Popis nabídky
-            WebElement descElement = wait.until(ExpectedConditions.presenceOfElementLocated(
-                    By.cssSelector("[data-section-id='DESCRIPTION_DEFAULT']"))
-            );
+            WebElement descElement = wait.until(ExpectedConditions.presenceOfElementLocated(By.cssSelector("[data-section-id='DESCRIPTION_DEFAULT']")));
             String description = descElement.getText().trim();
             listing.setDescription(description);
 
@@ -237,6 +217,7 @@ public class AirbnbCrawler {
 
             crawlHost(driver, host);
             listing.setHost(host);
+            hosts.add(host);
 
 
         } catch (Exception e) {
@@ -255,14 +236,11 @@ public class AirbnbCrawler {
 
         try {
             // Sekce s hostitelem
-            WebElement hostSection = wait.until(ExpectedConditions.presenceOfElementLocated(
-                    By.cssSelector("[data-section-id='MEET_YOUR_HOST']")));
+            WebElement hostSection = wait.until(ExpectedConditions.presenceOfElementLocated(By.cssSelector("[data-section-id='MEET_YOUR_HOST']")));
 
             // Jméno hostitele
             try {
-                WebElement nameElement = driver.findElement(By.xpath(
-                        "//*[contains(text(),'Hostitelem je') or contains(text(),'Ubytuj se u')]"
-                ));
+                WebElement nameElement = driver.findElement(By.xpath("//*[contains(text(),'Hostitelem je') or contains(text(),'Ubytuj se u')]"));
                 String nameText = nameElement.getText().trim();
                 String name = "";
 
@@ -362,31 +340,48 @@ public class AirbnbCrawler {
                     }
                 }
 
-                try {
-                    // Najdi počet recenzí – např. "255 hodnocení"
-                    Pattern reviewsPattern = Pattern.compile("(\\d+)\\s*hodnocení");
-                    Matcher reviewsMatcher = reviewsPattern.matcher(hostSectionText);
-                    if (reviewsMatcher.find()) {
-                        int reviewCount = Integer.parseInt(reviewsMatcher.group(1));
-                        host.setReviewCount(reviewCount);
-                    }
-
-                    // Najdi průměrné hodnocení – např. "průměrné hodnocení 4,64 z 5"
-                    Pattern ratingPattern = Pattern.compile("průměrné hodnocení\\s*([0-9.,]+)");
-                    Matcher ratingMatcher = ratingPattern.matcher(hostSectionText);
-                    if (ratingMatcher.find()) {
-                        double rating = Double.parseDouble(ratingMatcher.group(1).replace(",", "."));
-                        host.setAverageRating(rating);
-                    }
-                } catch (Exception e) {
-                    System.out.println("Nepodařilo se získat průměrné hodnocení nebo počet hodnocení hostitele:");
-                    e.printStackTrace();
-                }
-
-
             } catch (Exception e) {
                 System.out.println("Nepodařilo se získat URL profilu hostitele.");
                 e.printStackTrace();
+            }
+
+            //pocet recenzi a prumerne hodnoceni
+            try {
+                // Najdi počet recenzí – např. "255 hodnocení"
+                Pattern reviewsPattern = Pattern.compile("(\\d+)\\s*hodnocení");
+                Matcher reviewsMatcher = reviewsPattern.matcher(hostSectionText);
+                if (reviewsMatcher.find()) {
+                    int reviewCount = Integer.parseInt(reviewsMatcher.group(1));
+                    host.setReviewCount(reviewCount);
+                }
+
+                // Najdi průměrné hodnocení – např. "průměrné hodnocení 4,64 z 5"
+                Pattern ratingPattern = Pattern.compile("průměrné hodnocení\\s*([0-9.,]+)");
+                Matcher ratingMatcher = ratingPattern.matcher(hostSectionText);
+                if (ratingMatcher.find()) {
+                    double rating = Double.parseDouble(ratingMatcher.group(1).replace(",", "."));
+                    host.setAverageRating(rating);
+                }
+            } catch (Exception e) {
+                System.out.println("Nepodařilo se získat průměrné hodnocení nebo počet hodnocení hostitele:");
+                e.printStackTrace();
+            }
+
+            //zda je hodtitel jednotlivec anebo firma
+            try {
+                WebElement hostTypeButton = wait.until(ExpectedConditions.presenceOfElementLocated(
+                        By.xpath("//button[contains(text(), 'Tuto nabídku nabízí')]"))
+                );
+                String hostText = hostTypeButton.getText().toLowerCase();
+
+                // Určení typu hostitele
+                if (hostText.contains("jednotlivec")) {
+                    host.setProfessional(false);
+                } else if (hostText.contains("firma")) {
+                    host.setProfessional(true);
+                }
+            } catch (TimeoutException | NoSuchElementException e) {
+                System.out.println("Nepodařilo se zjistit typ hostitele.");
             }
 
 
@@ -394,6 +389,20 @@ public class AirbnbCrawler {
             System.out.println("Nepodařilo se získat údaje o hostiteli.");
             e.printStackTrace();
         }
+
+
+
+    }
+
+    //hledani poctu nabidek
+    public void numberOfListingsSearch(HashSet<Host> hosts, List<Listing> listings){
+       for(Listing listing : listings){
+           for(Host host : hosts){
+               if(host.equals(listing.getHost())){
+                   listing.getHost().increaseNumberOfListings();
+               }
+           }
+       }
     }
 
 
