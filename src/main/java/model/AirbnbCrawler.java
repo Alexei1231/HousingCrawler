@@ -57,7 +57,7 @@ public class AirbnbCrawler {
                         System.out.println("⚠️ Cena za noc nenalezena: " + e.getMessage());
                     }
 
-                    // Hodnocení a počet recenzí
+                    // Hodnocení a počet recenzí nabidky
                     try {
                         WebElement ratingSpan = card.findElement(By.xpath(".//span[@aria-hidden='true' and contains(text(), '(')]"));
                         String ratingText = ratingSpan.getText(); // např. "4,63 (17)"
@@ -75,11 +75,10 @@ public class AirbnbCrawler {
                     }
 
 
-
-                    // Odkaz na detail nabídky
+                    // Odkaz na detail nabidky
                     String href = card.findElement(By.cssSelector("a[href*='/rooms/']")).getAttribute("href");
                     listing.setUrl(href);
-                    crawlFromCard(driver, listing, href, hosts);
+                    crawlFromCard(driver, listing, href);
                     listings.add(listing);
                 } catch (Exception e) {
                     System.out.println("Chyba pri zpracovani karty: " + e.getMessage());
@@ -103,7 +102,7 @@ public class AirbnbCrawler {
 
 
         }
-        numberOfListingsSearch(hosts, listings);
+
         // Uložení JSON souboru na konci:
         com.google.gson.Gson gson = new com.google.gson.GsonBuilder().setPrettyPrinting().create();
         try (FileWriter writer = new FileWriter("airbnb_results.json")) {
@@ -112,7 +111,7 @@ public class AirbnbCrawler {
         }
     }
 
-    public void crawlFromCard(WebDriver driver, Listing listing, String url, HashSet<Host> hosts) {
+    public void crawlFromCard(WebDriver driver, Listing listing, String url) {
         String originalWindow = driver.getWindowHandle();
 
         // Otevři novou záložku přes JavaScript
@@ -217,7 +216,6 @@ public class AirbnbCrawler {
 
             crawlHost(driver, host);
             listing.setHost(host);
-            hosts.add(host);
 
 
         } catch (Exception e) {
@@ -314,36 +312,20 @@ public class AirbnbCrawler {
 
             // ✅ URL profilu z <a>
             try {
-                // Hledej <a> elementy a najdi první s odkazem na profil
-                List<WebElement> links = driver.findElements(By.tagName("a"));
-                for (WebElement link : links) {
-                    String href = link.getAttribute("href");
-                    if (href != null && href.contains("/users/show/")) {
-                        host.setProfileUrl(href.startsWith("http") ? href : "https://www.airbnb.com" + href);
-                        break;
-                    }
-                }
+                // Najdi <a> element s atributem aria-label přesně podle zadání
+                WebElement link = driver.findElement(By.xpath("//a[@aria-label='Přejít na celý profil hostitele']"));
+                String href = link.getAttribute("href");
 
-                // Fallback: pokud URL není nalezena, zkus z <img>
-                if (host.getProfileUrl() == null) {
-                    try {
-                        WebElement img = hostSection.findElement(By.tagName("img"));
-                        String imgUrl = img.getAttribute("src");
-                        Pattern idPattern = Pattern.compile("/user/(\\d+|[a-f0-9\\-]+)\\.jpg");
-                        Matcher idMatcher = idPattern.matcher(imgUrl);
-                        if (idMatcher.find()) {
-                            String userId = idMatcher.group(1);
-                            host.setProfileUrl("https://www.airbnb.com/users/show/" + userId);
-                        }
-                    } catch (Exception ignore) {
-                        System.out.println("Nepodařilo se získat URL profilu ani z obrázku.");
+                if (href != null) {
+                    if (!href.startsWith("http")) {
+                        href = "https://www.airbnb.com" + href;
                     }
+                    host.setProfileUrl(href);
                 }
-
-            } catch (Exception e) {
-                System.out.println("Nepodařilo se získat URL profilu hostitele.");
-                e.printStackTrace();
+            } catch (NoSuchElementException e) {
+                System.out.println("❌ Nebyl nalezen odkaz s aria-label='Přejít na celý profil hostitele'.");
             }
+
 
             //pocet recenzi a prumerne hodnoceni
             try {
@@ -367,7 +349,7 @@ public class AirbnbCrawler {
                 e.printStackTrace();
             }
 
-            //zda je hodtitel jednotlivec anebo firma
+            //zda je hostitel jednotlivec anebo firma
             try {
                 WebElement hostTypeButton = wait.until(ExpectedConditions.presenceOfElementLocated(
                         By.xpath("//button[contains(text(), 'Tuto nabídku nabízí')]"))
@@ -389,20 +371,66 @@ public class AirbnbCrawler {
             System.out.println("Nepodařilo se získat údaje o hostiteli.");
             e.printStackTrace();
         }
-
-
+        numberOfListingsSearch(driver, host, host.getProfileUrl());
 
     }
 
     //hledani poctu nabidek
-    public void numberOfListingsSearch(HashSet<Host> hosts, List<Listing> listings){
-       for(Listing listing : listings){
-           for(Host host : hosts){
-               if(host.equals(listing.getHost())){
-                   listing.getHost().increaseNumberOfListings();
-               }
-           }
-       }
+//    public void numberOfListingsSearch(HashSet<Host> hosts, List<Listing> listings){
+//       for(Listing listing : listings){
+//           for(Host host : hosts){
+//               if(host.equals(listing.getHost())){
+//                   listing.getHost().increaseNumberOfListings();
+//               }
+//           }
+//       }
+//    }
+
+    //hledani poctu nabidek se vstupem do karticky hostitele - nefungunguje protoe link na toho hosta neni z nejakeho duvod pristupny
+    public void numberOfListingsSearch(WebDriver driver, Host host, String url) {
+        String originalWindow = driver.getWindowHandle();
+        JavascriptExecutor js = (JavascriptExecutor) driver;
+        js.executeScript("window.open()");
+        List<String> tabs = new ArrayList<>(driver.getWindowHandles());
+        driver.switchTo().window(tabs.get(tabs.size() - 1));
+
+        try {
+            driver.get(url);
+            WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(10));
+            int numberOfListings = -1;
+
+            try {
+                // Pokus o nalezení tlačítka s textem „Zobrazit všechny uživatelovy nabídky (XX)“
+                WebElement button = wait.until(ExpectedConditions.visibilityOfElementLocated(
+                        By.xpath("//button[contains(text(), 'Zobrazit všechny uživatelovy nabídky')]")
+                ));
+                String buttonText = button.getText();
+                Matcher matcher = Pattern.compile("\\((\\d+)\\)").matcher(buttonText);
+                if (matcher.find()) {
+                    numberOfListings = Integer.parseInt(matcher.group(1));
+                    System.out.println("Počet inzerátů z tlačítka: " + numberOfListings);
+                }
+            } catch (TimeoutException e) {
+                System.out.println("Tlačítko nebylo nalezeno, zkouším spočítat odkazy.");
+            }
+
+            // Pokud tlačítko nebylo nalezeno nebo neobsahovalo číslo
+            if (numberOfListings == -1) {
+                List<WebElement> roomLinks = driver.findElements(By.xpath(
+                        "//a[contains(@href, '/rooms/') and contains(@href, '?source_impression_id')]"
+                ));
+                numberOfListings = roomLinks.size();
+                System.out.println("Počet inzerátů z odkazů: " + numberOfListings);
+            }
+
+            host.setNumberOfListings(numberOfListings);
+
+        } catch (Exception e) {
+            System.out.println("Chyba při získávání počtu nabídek hostitele: " + e.getMessage());
+        } finally {
+            driver.close();
+            driver.switchTo().window(originalWindow);
+        }
     }
 
 
