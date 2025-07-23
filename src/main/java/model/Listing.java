@@ -1,5 +1,8 @@
 package model;
 
+import java.util.ArrayList;
+import java.util.Date;
+
 public class Listing {
     private String title;
     private String checkInDate;
@@ -16,6 +19,25 @@ public class Listing {
 
     private Host host;
 
+    ArrayList<Price> priceArrayList;
+
+    public static class Price{
+        Date date;
+        int price;
+
+        public Price(Date date, int price) {
+            this.date = date;
+            this.price = price;
+        }
+    }
+
+    public void addPrice(Price price) {
+        this.priceArrayList.add(price);
+    }
+
+    public ArrayList<Price> getPriceArrayList() {
+        return priceArrayList;
+    }
 
     public double getPricePerNightEur() {
         return pricePerNightEur;

@@ -1,6 +1,4 @@
 package model;
-import java.util.List;
-
 
 
 public class Host {
@@ -15,6 +13,7 @@ public class Host {
     private double averageRating;
     private String responseRate;
     private String responseTime;
+
 
     // Конструктор, геттеры и сеттеры
     public Host(String name, String profileUrl) {
