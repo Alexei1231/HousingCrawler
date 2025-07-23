@@ -85,13 +85,6 @@ public class AirbnbPriceCrawler {
         String originalWindow = driver.getWindowHandle();
         ((JavascriptExecutor) driver).executeScript("window.open(arguments[0])", url);
 
-        try {
-            // Pokus o zavření případného popup okna
-            WebElement closePopupButton = wait.until(ExpectedConditions.elementToBeClickable(By.cssSelector("button[aria-label='Zavřít']")));
-            closePopupButton.click();
-            Thread.sleep(1500);
-        } catch (TimeoutException | NoSuchElementException | InterruptedException ignored) {
-        }
 
         Set<String> allWindows = driver.getWindowHandles();
         for (String windowHandle : allWindows) {
@@ -100,6 +93,20 @@ public class AirbnbPriceCrawler {
                 break;
             }
         }
+
+        // Pokus o zavření případného popup okna (např. přihlášení)
+        try {
+            WebDriverWait shortWait = new WebDriverWait(driver, Duration.ofSeconds(3));
+            WebElement closePopupButton = shortWait.until(ExpectedConditions.elementToBeClickable(
+                    By.cssSelector("button[aria-label='Zavřít']"))
+            );
+            closePopupButton.click();
+            Thread.sleep(1000);
+            System.out.println("✔ Pop-up byl zavřen.");
+        } catch (TimeoutException | NoSuchElementException | InterruptedException ignored) {
+            System.out.println("ℹ Pop-up se neobjevil.");
+        }
+
 
         try {
             WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(10));
