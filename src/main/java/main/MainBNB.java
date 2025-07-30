@@ -1,6 +1,7 @@
 package main;
 
 import files.JsonToExcel;
+import model.AirbnbCrawler;
 import model.AirbnbPriceCrawler;
 
 import java.io.*;

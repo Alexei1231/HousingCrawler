@@ -3,14 +3,20 @@ package model;
 import org.openqa.selenium.*;
 import org.openqa.selenium.NoSuchElementException;
 import org.openqa.selenium.edge.EdgeDriver;
+import org.openqa.selenium.edge.EdgeOptions;
+import org.openqa.selenium.interactions.Actions;
 import org.openqa.selenium.support.ui.ExpectedConditions;
 import org.openqa.selenium.support.ui.WebDriverWait;
 
 import java.io.*;
 import java.time.Duration;
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.time.format.TextStyle;
 import java.util.*;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -33,6 +39,9 @@ public class AirbnbPriceCrawler {
         HashSet<Host> hosts = new HashSet<>();
         int pageNum = 2;
 
+        // Создаём executor с одним потоком (можно будет изменить на 18)
+        ExecutorService executor = Executors.newFixedThreadPool(1);
+
         while (true) {
             Thread.sleep(3000);
 
@@ -41,21 +50,24 @@ public class AirbnbPriceCrawler {
 
             for (WebElement card : cards) {
                 try {
-                    //nazev
+                    // Название и ссылка
                     String title = card.findElement(By.cssSelector("[data-testid='listing-card-title']")).getText();
-                    Listing listing = new Listing(title);
-
-                    // Odkaz na detail nabidky
                     String href = card.findElement(By.cssSelector("a[href*='/rooms/']")).getAttribute("href");
-                    listing.setUrl(href);
-                    crawlFromCard(driver, listing, href);
+
+                    Listing listing = new Listing(title);
                     listings.add(listing);
+
+                    // Запуск асинхронного потока
+                    executor.submit(() -> {
+                        crawlFromCard(listing, href + "?locale=cs&currency=EUR"); // теперь crawlFromCard сам создаёт WebDriver
+                    });
+
                 } catch (Exception e) {
                     System.out.println("Chyba pri zpracovani karty: " + e.getMessage());
                 }
             }
 
-            // Přechod na další stránku:
+            // Переход на следующую страницу
             List<WebElement> buttons = driver.findElements(By.xpath("//a[text()='" + pageNum + "']"));
             if (!buttons.isEmpty()) {
                 try {
@@ -69,11 +81,13 @@ public class AirbnbPriceCrawler {
                 System.out.println("Posledni stranka, ukonceni.");
                 break;
             }
-
-
         }
 
-        // Uložení JSON souboru na konci:
+        // Завершаем потоки
+        executor.shutdown();
+        executor.awaitTermination(1, TimeUnit.HOURS);
+
+        // Сохраняем результат
         com.google.gson.Gson gson = new com.google.gson.GsonBuilder().setPrettyPrinting().create();
         try (FileWriter writer = new FileWriter("airbnb_results.json")) {
             gson.toJson(listings, writer);
@@ -81,140 +95,118 @@ public class AirbnbPriceCrawler {
         }
     }
 
-    public void crawlFromCard(WebDriver driver, Listing listing, String url) { //otevira stranku a prochazi pres dny, ktere dava do metody select dates
-        String originalWindow = driver.getWindowHandle();
-        ((JavascriptExecutor) driver).executeScript("window.open(arguments[0])", url);
 
+    public void crawlFromCard(Listing listing, String url) {
+        // Настройка EdgeDriver
+        EdgeOptions options = new EdgeOptions();
+        //options.addArguments("--headless=new"); // Можно убрать headless, если хочешь видеть окна
+        WebDriver localDriver = new EdgeDriver(options);
+        WebDriverWait wait = new WebDriverWait(localDriver, Duration.ofSeconds(10));
+        localDriver.get(url);
+        try {
 
-        Set<String> allWindows = driver.getWindowHandles();
-        for (String windowHandle : allWindows) {
-            if (!windowHandle.equals(originalWindow)) {
-                driver.switchTo().window(windowHandle);
-                break;
+            // Подождем немного, чтобы убедиться, что страница загружена
+            Thread.sleep(3000);
+
+            try {
+                WebElement closePopupButton = wait.until(ExpectedConditions.elementToBeClickable(By.cssSelector("button[aria-label='Zavřít']")));
+                closePopupButton.click();
+                System.out.println("ℹ Попап закрыт");
+            } catch (TimeoutException e) {
+                System.out.println("ℹ Попап не найден");
             }
-        }
 
-        // Pokus o zavření případného popup okna (např. přihlášení)
-        try {
-            WebDriverWait shortWait = new WebDriverWait(driver, Duration.ofSeconds(3));
-            WebElement closePopupButton = shortWait.until(ExpectedConditions.elementToBeClickable(
-                    By.cssSelector("button[aria-label='Zavřít']"))
-            );
-            closePopupButton.click();
-            Thread.sleep(1000);
-            System.out.println("✔ Pop-up byl zavřen.");
-        } catch (TimeoutException | NoSuchElementException | InterruptedException ignored) {
-            System.out.println("ℹ Pop-up se neobjevil.");
-        }
-
-
-        try {
-            WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(10));
-
-            LocalDate startDate = LocalDate.now().plusDays(1); // завтра
+            // Тут позже будет логика парсинга
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("d. M. yyyy");
+            LocalDate startDate = LocalDate.now().plusDays(1); // Завтра
             LocalDate endDate = startDate.plusDays(365);
 
-            while (!startDate.isAfter(endDate.minusDays(1))) {
-                LocalDate checkIn = startDate;
-                LocalDate checkOut = checkIn.plusDays(1);
+            for (LocalDate checkInDate = startDate; checkInDate.isBefore(endDate); checkInDate = checkInDate.plusDays(1)) {
+                LocalDate checkOutDate = checkInDate.plusDays(1);
+
+                String checkInStr = checkInDate.format(formatter);
+                String checkOutStr = checkOutDate.format(formatter);
 
                 try {
-                    selectDates(driver, checkIn, checkOut);
-                    double totalPrice = extractTotalPrice(driver);
+                    clickCalendar(localDriver);  // открыть календарь
+                    setDates(localDriver, checkInStr, checkOutStr);  // ввести даты
+                    //String price = extractPrice(localDriver); // TODO: метод, который собирает цену с экрана
+                    //listing.getPriceArrayList().add(price); // добавляем цену к листингу
 
-                    listing.addPrice(new Listing.Price(
-                            java.sql.Date.valueOf(checkIn),
-                            (int) Math.round(totalPrice)
-                    ));
-
-                    System.out.println("✔ Cena " + checkIn + " - " + totalPrice + "€");
-
+                    //System.out.println("✔ Дата: " + checkInStr + " → Цена: " + price);
                 } catch (Exception e) {
-                    System.out.println("✖ Datum přeskočeno: " + checkIn);
+                    System.out.println("⚠ Ошибка при обработке даты " + checkInStr + ": " + e.getMessage());
                 }
-
-                startDate = startDate.plusDays(1);
             }
 
+
+        } catch (Exception e) {
+            System.out.println("✖ Ошибка при открытии листинга: " + e.getMessage());
         } finally {
-            driver.close();
-            driver.switchTo().window(originalWindow);
+            // Закрываем драйвер
+            localDriver.quit();
+            System.out.println("✖ Закрыт драйвер для листинга: " + listing.getTitle());
         }
     }
 
 
-    // Форматує дату у вигляді "3. 8. 2025"
-    private String formatCzechDate(LocalDate date) {
-        int day = date.getDayOfMonth();
-        int month = date.getMonthValue();
-        int year = date.getYear();
-        return String.format("%d. %d. %d", day, month, year);
-    }
 
-    // Вводить дату в поля зверху (без кліків по календарю)
-    private void selectDates(WebDriver driver, LocalDate checkIn, LocalDate checkOut) {
-        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(10));
 
-        // Відкриваємо календар, клікаємо на поле check-in
-        WebElement checkInField = wait.until(ExpectedConditions.elementToBeClickable(
-                By.cssSelector("div[data-testid='change-dates-checkIn']")));
-        checkInField.click();
 
-        // Клікаємо на дату check-in в календарі
-        clickDateInCalendar(driver, checkIn);
-
-        // Клікаємо на дату check-out в календарі
-        clickDateInCalendar(driver, checkOut);
-
-        // Трохи почекати, щоб оновилася ціна
+    private void resetPageState(WebDriver driver) {
         try {
-            Thread.sleep(1500);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
+            // Попробуем закрыть календарь кликом по пустому месту
+            Actions actions = new Actions(driver);
+            actions.moveByOffset(10, 10).click().perform();
+            Thread.sleep(1000);
+        } catch (Exception ignored) {
+        }
+
+        try {
+            // Попробуем нажать Escape
+            new Actions(driver).sendKeys(Keys.ESCAPE).perform();
+            Thread.sleep(500);
+        } catch (Exception ignored) {
+        }
+
+        try {
+            // JavaScript: сброс фокуса
+            ((JavascriptExecutor) driver).executeScript("document.activeElement.blur();");
+        } catch (Exception ignored) {
         }
     }
 
-    private void clickDateInCalendar(WebDriver driver, LocalDate date) {
+    private void clickCalendar(WebDriver driver) {
+        WebElement checkInElement = driver.findElement(By.cssSelector("div[data-testid='change-dates-checkIn']"));
+        checkInElement.click();
+    }
+
+    public void setDates(WebDriver driver, String checkIn, String checkOut) {
         WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(10));
-        String dateString = date.toString(); // формат yyyy-MM-dd, напр. "2025-07-29"
 
-        By dateLocator = By.cssSelector("td[data-testid='datepicker-day-" + dateString + "']");
+        // Встановлюємо дату приїзду
+        WebElement checkInInput = wait.until(ExpectedConditions.elementToBeClickable(By.id("checkIn-book_it")));
+        checkInInput.click();
+        checkInInput.sendKeys(Keys.CONTROL + "a"); // Виділити стару дату
+        checkInInput.sendKeys(Keys.BACK_SPACE);    // Видалити
+        checkInInput.sendKeys(checkIn);
+        checkInInput.sendKeys(Keys.ENTER);         // Підтвердити
 
-        WebElement dateElement = wait.until(ExpectedConditions.elementToBeClickable(dateLocator));
-        dateElement.click();
+        // Встановлюємо дату від’їзду
+        WebElement checkOutInput = wait.until(ExpectedConditions.elementToBeClickable(By.id("checkOut-book_it")));
+        checkOutInput.click();
+        checkOutInput.sendKeys(Keys.CONTROL + "a");
+        checkOutInput.sendKeys(Keys.BACK_SPACE);
+        checkOutInput.sendKeys(checkOut);
+        checkOutInput.sendKeys(Keys.ENTER);
     }
 
 
-    // Витягує ціну з детальної сторінки пропозиції
-    private double extractTotalPrice(WebDriver driver) {
-        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(10));
-        WebElement priceEl = wait.until(ExpectedConditions.visibilityOfElementLocated(
-                By.cssSelector("div._1avmy66 span._j1kt73")
-        ));
-        String priceText = priceEl.getText(); // наприклад, "€ 149,23"
-        return parseDoublePrice(priceText);
-    }
 
     // Допоміжний метод для парсингу ціни (замінює кому на крапку)
     private double parseDoublePrice(String text) {
         String clean = text.replaceAll("[^0-9,]", "").replace(",", ".");
         return Double.parseDouble(clean);
-    }
-
-
-    public void closePopupIfPresent() {
-        try {
-            WebElement closeButton = driver.findElement(By.cssSelector("button[aria-label='Zavřít']"));
-            if (closeButton.isDisplayed()) {
-                closeButton.click();
-                Thread.sleep(1000); // почекати закриття поп-апа
-                System.out.println("Pop-up byl zavren.");
-            }
-        } catch (NoSuchElementException e) {
-            System.out.println("Pop-up nebyl nalezen.");
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
     }
 
 
