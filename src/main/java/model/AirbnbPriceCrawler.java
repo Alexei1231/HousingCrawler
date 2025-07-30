@@ -123,21 +123,28 @@ public class AirbnbPriceCrawler {
 
             for (LocalDate checkInDate = startDate; checkInDate.isBefore(endDate); checkInDate = checkInDate.plusDays(1)) {
                 LocalDate checkOutDate = checkInDate.plusDays(1);
-
                 String checkInStr = checkInDate.format(formatter);
                 String checkOutStr = checkOutDate.format(formatter);
 
                 try {
-                    clickCalendar(localDriver);  // открыть календарь
-                    setDates(localDriver, checkInStr, checkOutStr);  // ввести даты
-                    //String price = extractPrice(localDriver); // TODO: метод, который собирает цену с экрана
-                    //listing.getPriceArrayList().add(price); // добавляем цену к листингу
+                    try {
+                        clickCalendar(localDriver);
+                    }catch (Exception ignored){}
+                    boolean success = setDates(localDriver, checkInStr, checkOutStr);
 
-                    //System.out.println("✔ Дата: " + checkInStr + " → Цена: " + price);
+                    if (!success) {
+                        System.out.println("⏭ Пропускаем дату: " + checkInStr);
+                        continue; // идем к следующей дате
+                    }
+
+                    //TODO: thread sleep for 500ms, then addprices etc
+                    System.out.println("✔ Дата установлена: " + checkInStr + " → " + checkOutStr);
                 } catch (Exception e) {
-                    System.out.println("⚠ Ошибка при обработке даты " + checkInStr + ": " + e.getMessage());
+                    System.out.println("⚠ Ошибка при дате " + checkInStr + ": " + e.getMessage());
                 }
             }
+
+
 
 
         } catch (Exception e) {
@@ -181,24 +188,30 @@ public class AirbnbPriceCrawler {
         checkInElement.click();
     }
 
-    public void setDates(WebDriver driver, String checkIn, String checkOut) {
+    public boolean setDates(WebDriver driver, String checkIn, String checkOut) {
         WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(10));
+        try {
+            // чек-ин
+            WebElement checkInInput = wait.until(ExpectedConditions.elementToBeClickable(By.id("checkIn-book_it")));
+            checkInInput.click();
+            checkInInput.sendKeys(Keys.CONTROL + "a");
+            checkInInput.sendKeys(Keys.BACK_SPACE);
+            checkInInput.sendKeys(checkIn);
+            checkInInput.sendKeys(Keys.ENTER);
 
-        // Встановлюємо дату приїзду
-        WebElement checkInInput = wait.until(ExpectedConditions.elementToBeClickable(By.id("checkIn-book_it")));
-        checkInInput.click();
-        checkInInput.sendKeys(Keys.CONTROL + "a"); // Виділити стару дату
-        checkInInput.sendKeys(Keys.BACK_SPACE);    // Видалити
-        checkInInput.sendKeys(checkIn);
-        checkInInput.sendKeys(Keys.ENTER);         // Підтвердити
+            // чек-аут
+            WebElement checkOutInput = wait.until(ExpectedConditions.elementToBeClickable(By.id("checkOut-book_it")));
+            checkOutInput.click();
+            checkOutInput.sendKeys(Keys.CONTROL + "a");
+            checkOutInput.sendKeys(Keys.BACK_SPACE);
+            checkOutInput.sendKeys(checkOut);
+            checkOutInput.sendKeys(Keys.ENTER);
 
-        // Встановлюємо дату від’їзду
-        WebElement checkOutInput = wait.until(ExpectedConditions.elementToBeClickable(By.id("checkOut-book_it")));
-        checkOutInput.click();
-        checkOutInput.sendKeys(Keys.CONTROL + "a");
-        checkOutInput.sendKeys(Keys.BACK_SPACE);
-        checkOutInput.sendKeys(checkOut);
-        checkOutInput.sendKeys(Keys.ENTER);
+            return true;
+        } catch (Exception e) {
+            System.out.println("⚠ Невозможно установить даты " + checkIn + " → " + checkOut + ": " + e.getMessage());
+            return false;
+        }
     }
 
 
