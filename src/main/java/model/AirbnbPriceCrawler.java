@@ -30,12 +30,11 @@ public class AirbnbPriceCrawler {
     }
 
     public void crawl(int maxThreads) throws InterruptedException, IOException {
-        String searchUrl = "https://www.airbnb.cz/s/Praha/homes?currency=EUR";
+        String searchUrl = "https://www.airbnb.cz/s/Praha/homes?currency=EUR&checkin=2025-10-25&checkout=2025-10-26";
         driver.get(searchUrl);
         Thread.sleep(5000);
 
         List<Listing> listings = new ArrayList<>();
-        HashSet<Host> hosts = new HashSet<>();
         int pageNum = 2;
 
         ExecutorService executor = Executors.newFixedThreadPool(maxThreads);
@@ -136,10 +135,20 @@ public class AirbnbPriceCrawler {
                 System.out.println("ℹ Попап не найден");
             }
 
+            try {
+                WebElement acceptButton = wait.until(ExpectedConditions.elementToBeClickable(
+                        By.xpath("//button[normalize-space()='Pouze nezbytné']")));
+                acceptButton.click();
+                System.out.println("✅ Кнопка 'Pouze nezbytné' нажата.");
+            } catch (Exception e) {
+                System.out.println("⚠️ Кнопка 'Pouze nezbytné' не найдена или не нажата: " + e.getMessage());
+            }
+
+
             // Тут позже будет логика парсинга
             DateTimeFormatter formatter = DateTimeFormatter.ofPattern("d. M. yyyy");
             LocalDate startDate = LocalDate.now().plusDays(1); // Завтра
-            LocalDate endDate = startDate.plusDays(365);
+            LocalDate endDate = startDate.plusDays(100);//v production ready verzi je potreba nastavit 365
 
             for (LocalDate checkInDate = startDate; checkInDate.isBefore(endDate); checkInDate = checkInDate.plusDays(1)) {
                 LocalDate checkOutDate = checkInDate.plusDays(1);
@@ -149,11 +158,13 @@ public class AirbnbPriceCrawler {
                 try {
                     boolean success = setDates(localDriver, checkInStr, checkOutStr);
 
+
+
                     if (!success) {
                         System.out.println("⏭ Пропускаем дату: " + checkInStr);
                         continue; // идем к следующей дате
                     }
-                    Thread.sleep(300);
+                    Thread.sleep(1000);
                     //TODO: thread sleep for 500ms, then addprices etc
                     System.out.println("✔ Дата установлена: " + checkInStr + " → " + checkOutStr);
                 } catch (Exception e) {
@@ -172,36 +183,39 @@ public class AirbnbPriceCrawler {
     }
 
 
-    private void resetPageState(WebDriver driver) {
-        try {
-            // Попробуем закрыть календарь кликом по пустому месту
-            Actions actions = new Actions(driver);
-            actions.moveByOffset(10, 10).click().perform();
-            Thread.sleep(1000);
-        } catch (Exception ignored) {
-        }
+
+    public void clickCalendar(WebDriver driver) {
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(10));
 
         try {
-            // Попробуем нажать Escape
-            new Actions(driver).sendKeys(Keys.ESCAPE).perform();
-            Thread.sleep(500);
-        } catch (Exception ignored) {
-        }
+            WebElement calendarToggle = wait.until(ExpectedConditions.elementToBeClickable(
+                    By.cssSelector("[data-testid='change-dates-checkIn']")
+            ));
 
-        try {
-            // JavaScript: сброс фокуса
-            ((JavascriptExecutor) driver).executeScript("document.activeElement.blur();");
-        } catch (Exception ignored) {
+            // Прокрутка к элементу перед кликом
+            ((JavascriptExecutor) driver).executeScript("arguments[0].scrollIntoView({behavior: 'instant', block: 'center'});", calendarToggle);
+            Thread.sleep(300); // немножко подождать после скролла
+
+            calendarToggle.click();
+
+            // Ждём, пока появится сам календарь
+            wait.until(ExpectedConditions.visibilityOfElementLocated(
+                    By.cssSelector("[data-testid='bookit-sidebar-availability-calendar']")
+            ));
+
+            System.out.println("✔ Календарь открыт");
+
+        } catch (ElementClickInterceptedException e) {
+            System.out.println("⚠ Не удалось кликнуть по элементу открытия календаря: " + e.getMessage());
+        } catch (Exception e) {
+            System.out.println("⚠ Ошибка при попытке открыть календарь: " + e.getMessage());
         }
     }
 
-    private void clickCalendar(WebDriver driver) {
-        WebElement checkInElement = driver.findElement(By.cssSelector("div[data-testid='change-dates-checkIn']"));
-        checkInElement.click();
-    }
+
 
     public boolean setDates(WebDriver driver, String checkIn, String checkOut) {
-        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(10));
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(3));
         try {
             clickCalendar(driver);
         } catch (Exception ignored) {
@@ -215,6 +229,9 @@ public class AirbnbPriceCrawler {
             checkInInput.sendKeys(checkIn);
             checkInInput.sendKeys(Keys.ENTER);
 
+            if(isDateUnavailable(driver)){
+                return false;
+            }
             // чек-аут
             WebElement checkOutInput = wait.until(ExpectedConditions.elementToBeClickable(By.id("checkOut-book_it")));
             checkOutInput.click();
@@ -223,6 +240,10 @@ public class AirbnbPriceCrawler {
             checkOutInput.sendKeys(checkOut);
             checkOutInput.sendKeys(Keys.ENTER);
 
+            if(isDateUnavailable(driver)){
+                return false;
+            }
+
             return true;
         } catch (Exception e) {
             System.out.println("⚠ Невозможно установить даты " + checkIn + " → " + checkOut + ": " + e.getMessage());
@@ -230,6 +251,14 @@ public class AirbnbPriceCrawler {
         }
     }
 
+    private boolean isDateUnavailable(WebDriver driver) {
+        try {
+            WebElement errorDiv = driver.findElement(By.id("book_it_dateInputsErrorId"));
+            return errorDiv.isDisplayed();
+        } catch (NoSuchElementException e) {
+            return false;
+        }
+    }
 
     // Допоміжний метод для парсингу ціни (замінює кому на крапку)
     private double parseDoublePrice(String text) {
