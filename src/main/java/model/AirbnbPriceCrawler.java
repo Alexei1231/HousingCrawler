@@ -114,7 +114,6 @@ public class AirbnbPriceCrawler {
     }
 
 
-
     public void crawlFromCard(Listing listing, String url) {
         // Настройка EdgeDriver
         EdgeOptions options = new EdgeOptions();
@@ -159,13 +158,24 @@ public class AirbnbPriceCrawler {
                     boolean success = setDates(localDriver, checkInStr, checkOutStr);
 
 
-
                     if (!success) {
                         System.out.println("⏭ Пропускаем дату: " + checkInStr);
                         continue; // идем к следующей дате
                     }
                     Thread.sleep(1000);
-                    //TODO: thread sleep for 500ms, then addprices etc
+                    // Ищем <span>, содержащий текст "za noc"
+//                    WebElement pricePerNightElement = wait.until(ExpectedConditions.visibilityOfElementLocated(
+//                            By.xpath("//span[contains(text(), 'za noc')]")));
+//
+//// Извлекаем цену
+//                    String rawText = pricePerNightElement.getText(); // например "€ 55 za noc"
+//
+//// Оставляем только числовую часть
+//                    String priceText = rawText.replaceAll("[^\\d,]", "").replace(",", ".");
+//                    double pricePerNight = Double.parseDouble(priceText);
+//                    Listing.Price price = new Listing.Price(java.sql.Date.valueOf(checkInDate), pricePerNight);
+//                    listing.addPrice(price);
+                    //TODO: thread sleep for 500ms, then addprices etc - partly done, needs testing
                     System.out.println("✔ Дата установлена: " + checkInStr + " → " + checkOutStr);
                 } catch (Exception e) {
                     System.out.println("⚠ Ошибка при дате " + checkInStr + ": " + e.getMessage());
@@ -181,7 +191,6 @@ public class AirbnbPriceCrawler {
             System.out.println("✖ Закрыт драйвер для листинга: " + listing.getTitle());
         }
     }
-
 
 
     public void clickCalendar(WebDriver driver) {
@@ -213,7 +222,6 @@ public class AirbnbPriceCrawler {
     }
 
 
-
     public boolean setDates(WebDriver driver, String checkIn, String checkOut) {
         WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(3));
         try {
@@ -229,7 +237,7 @@ public class AirbnbPriceCrawler {
             checkInInput.sendKeys(checkIn);
             checkInInput.sendKeys(Keys.ENTER);
 
-            if(isDateUnavailable(driver)){
+            if (isDateUnavailable(driver)) {
                 return false;
             }
             // чек-аут
@@ -240,7 +248,7 @@ public class AirbnbPriceCrawler {
             checkOutInput.sendKeys(checkOut);
             checkOutInput.sendKeys(Keys.ENTER);
 
-            if(isDateUnavailable(driver)){
+            if (isDateUnavailable(driver)) {
                 return false;
             }
 

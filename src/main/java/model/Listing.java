@@ -23,9 +23,9 @@ public class Listing {
 
     public static class Price{
         Date date;
-        int price;
+        double price;
 
-        public Price(Date date, int price) {
+        public Price(Date date, double price) {
             this.date = date;
             this.price = price;
         }
