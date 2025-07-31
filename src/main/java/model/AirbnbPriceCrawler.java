@@ -2,6 +2,7 @@ package model;
 
 import org.openqa.selenium.*;
 import org.openqa.selenium.NoSuchElementException;
+import org.openqa.selenium.TimeoutException;
 import org.openqa.selenium.edge.EdgeDriver;
 import org.openqa.selenium.edge.EdgeOptions;
 import org.openqa.selenium.interactions.Actions;
@@ -14,9 +15,7 @@ import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.format.TextStyle;
 import java.util.*;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -30,7 +29,7 @@ public class AirbnbPriceCrawler {
         this.wait = new WebDriverWait(driver, Duration.ofSeconds(10));
     }
 
-    public void crawl() throws InterruptedException, IOException {
+    public void crawl(int maxThreads) throws InterruptedException, IOException {
         String searchUrl = "https://www.airbnb.cz/s/Praha/homes?currency=EUR";
         driver.get(searchUrl);
         Thread.sleep(5000);
@@ -39,8 +38,7 @@ public class AirbnbPriceCrawler {
         HashSet<Host> hosts = new HashSet<>();
         int pageNum = 2;
 
-        // Создаём executor с одним потоком (можно будет изменить на 18)
-        ExecutorService executor = Executors.newFixedThreadPool(1);
+        ExecutorService executor = Executors.newFixedThreadPool(maxThreads);
 
         while (true) {
             Thread.sleep(3000);
@@ -48,23 +46,43 @@ public class AirbnbPriceCrawler {
             List<WebElement> cards = driver.findElements(By.cssSelector("div[data-testid='card-container']"));
             System.out.println("Na strance " + (pageNum - 1) + " se naslo tolik nabidek: " + cards.size());
 
+            List<Callable<Void>> tasks = new ArrayList<>();
+
             for (WebElement card : cards) {
                 try {
-                    // Название и ссылка
                     String title = card.findElement(By.cssSelector("[data-testid='listing-card-title']")).getText();
                     String href = card.findElement(By.cssSelector("a[href*='/rooms/']")).getAttribute("href");
 
                     Listing listing = new Listing(title);
                     listings.add(listing);
 
-                    // Запуск асинхронного потока
-                    executor.submit(() -> {
-                        crawlFromCard(listing, href + "?locale=cs&currency=EUR"); // теперь crawlFromCard сам создаёт WebDriver
-                    });
+                    Callable<Void> task = () -> {
+                        crawlFromCard(listing, href + "?locale=cs&currency=EUR");
+                        return null;
+                    };
+
+                    tasks.add(task);
 
                 } catch (Exception e) {
                     System.out.println("Chyba pri zpracovani karty: " + e.getMessage());
                 }
+            }
+
+            // Запускаем все задачи и ждём их окончания
+            try {
+                List<Future<Void>> futures = executor.invokeAll(tasks);
+                // Можно пройтись по futures и проверить исключения, если надо
+                for (Future<Void> future : futures) {
+                    try {
+                        future.get();
+                    } catch (ExecutionException ee) {
+                        System.out.println("Chyba v tasku: " + ee.getCause());
+                    }
+                }
+            } catch (InterruptedException e) {
+                System.out.println("Přerušeno při čekání na dokončení úloh");
+                executor.shutdownNow();
+                throw e;
             }
 
             // Переход на следующую страницу
@@ -83,7 +101,6 @@ public class AirbnbPriceCrawler {
             }
         }
 
-        // Завершаем потоки
         executor.shutdown();
         executor.awaitTermination(1, TimeUnit.HOURS);
 
@@ -93,7 +110,10 @@ public class AirbnbPriceCrawler {
             gson.toJson(listings, writer);
             System.out.println("Ulozeno " + listings.size() + " nabidek do JSON.");
         }
+
+        driver.quit();
     }
+
 
 
     public void crawlFromCard(Listing listing, String url) {
@@ -127,24 +147,19 @@ public class AirbnbPriceCrawler {
                 String checkOutStr = checkOutDate.format(formatter);
 
                 try {
-                    try {
-                        clickCalendar(localDriver);
-                    }catch (Exception ignored){}
                     boolean success = setDates(localDriver, checkInStr, checkOutStr);
 
                     if (!success) {
                         System.out.println("⏭ Пропускаем дату: " + checkInStr);
                         continue; // идем к следующей дате
                     }
-
+                    Thread.sleep(300);
                     //TODO: thread sleep for 500ms, then addprices etc
                     System.out.println("✔ Дата установлена: " + checkInStr + " → " + checkOutStr);
                 } catch (Exception e) {
                     System.out.println("⚠ Ошибка при дате " + checkInStr + ": " + e.getMessage());
                 }
             }
-
-
 
 
         } catch (Exception e) {
@@ -155,9 +170,6 @@ public class AirbnbPriceCrawler {
             System.out.println("✖ Закрыт драйвер для листинга: " + listing.getTitle());
         }
     }
-
-
-
 
 
     private void resetPageState(WebDriver driver) {
@@ -191,6 +203,10 @@ public class AirbnbPriceCrawler {
     public boolean setDates(WebDriver driver, String checkIn, String checkOut) {
         WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(10));
         try {
+            clickCalendar(driver);
+        } catch (Exception ignored) {
+        }
+        try {
             // чек-ин
             WebElement checkInInput = wait.until(ExpectedConditions.elementToBeClickable(By.id("checkIn-book_it")));
             checkInInput.click();
@@ -213,7 +229,6 @@ public class AirbnbPriceCrawler {
             return false;
         }
     }
-
 
 
     // Допоміжний метод для парсингу ціни (замінює кому на крапку)
