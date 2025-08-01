@@ -67,10 +67,10 @@ public class AirbnbPriceCrawler {
                 }
             }
 
-            // Запускаем все задачи и ждём их окончания
+            // spoustime vsechny vlakna a cekame, az se dokonci prace s nimi
             try {
                 List<Future<Void>> futures = executor.invokeAll(tasks);
-                // Можно пройтись по futures и проверить исключения, если надо
+
                 for (Future<Void> future : futures) {
                     try {
                         future.get();
@@ -84,20 +84,21 @@ public class AirbnbPriceCrawler {
                 throw e;
             }
 
-            // Переход на следующую страницу
-            List<WebElement> buttons = driver.findElements(By.xpath("//a[text()='" + pageNum + "']"));
-            if (!buttons.isEmpty()) {
-                try {
-                    buttons.get(0).click();
-                    pageNum++;
-                } catch (Exception e) {
-                    System.out.println("Chyba pri kliknuti na dalsi stranku");
-                    break;
-                }
-            } else {
-                System.out.println("Posledni stranka, ukonceni.");
-                break;
-            }
+            // Prechod na pristi stranku
+//            List<WebElement> buttons = driver.findElements(By.xpath("//a[text()='" + pageNum + "']"));
+//            if (!buttons.isEmpty()) {
+//                try {
+//                    buttons.get(0).click();
+//                    pageNum++;
+//                } catch (Exception e) {
+//                    System.out.println("Chyba pri kliknuti na dalsi stranku");
+//                    break;
+//                }
+//            } else {
+//                System.out.println("Posledni stranka, ukonceni.");
+//                break;
+//            }
+            break;
         }
 
         executor.shutdown();
@@ -129,24 +130,24 @@ public class AirbnbPriceCrawler {
             try {
                 WebElement closePopupButton = wait.until(ExpectedConditions.elementToBeClickable(By.cssSelector("button[aria-label='Zavřít']")));
                 closePopupButton.click();
-                System.out.println("ℹ Попап закрыт");
+                System.out.println("Pop-up byl zavren");
             } catch (TimeoutException e) {
-                System.out.println("ℹ Попап не найден");
+                System.out.println("Pop-up nebyl nalezen");
             }
 
             try {
                 WebElement acceptButton = wait.until(ExpectedConditions.elementToBeClickable(
                         By.xpath("//button[normalize-space()='Pouze nezbytné']")));
                 acceptButton.click();
-                System.out.println("✅ Кнопка 'Pouze nezbytné' нажата.");
+                System.out.println("✅ Tlacitko 'Pouze nezbytne' bylo stisknute.");
             } catch (Exception e) {
-                System.out.println("⚠️ Кнопка 'Pouze nezbytné' не найдена или не нажата: " + e.getMessage());
+                System.out.println("⚠️ Tlacitko 'Pouze nezbytné' nebylo nalezeno: " + e.getMessage());
             }
 
 
             // Тут позже будет логика парсинга
             DateTimeFormatter formatter = DateTimeFormatter.ofPattern("d. M. yyyy");
-            LocalDate startDate = LocalDate.now().plusDays(1); // Завтра
+            LocalDate startDate = LocalDate.now().plusDays(1); // Zitra
             LocalDate endDate = startDate.plusDays(100);//v production ready verzi je potreba nastavit 365
 
             for (LocalDate checkInDate = startDate; checkInDate.isBefore(endDate); checkInDate = checkInDate.plusDays(1)) {
@@ -159,36 +160,36 @@ public class AirbnbPriceCrawler {
 
 
                     if (!success) {
-                        System.out.println("⏭ Пропускаем дату: " + checkInStr);
+                        System.out.println("Preskocili jsme datum: " + checkInStr);
                         continue; // идем к следующей дате
                     }
                     Thread.sleep(1000);
-                    // Ищем <span>, содержащий текст "za noc"
-//                    WebElement pricePerNightElement = wait.until(ExpectedConditions.visibilityOfElementLocated(
-//                            By.xpath("//span[contains(text(), 'za noc')]")));
-//
-//// Извлекаем цену
-//                    String rawText = pricePerNightElement.getText(); // например "€ 55 za noc"
-//
-//// Оставляем только числовую часть
-//                    String priceText = rawText.replaceAll("[^\\d,]", "").replace(",", ".");
-//                    double pricePerNight = Double.parseDouble(priceText);
-//                    Listing.Price price = new Listing.Price(java.sql.Date.valueOf(checkInDate), pricePerNight);
-//                    listing.addPrice(price);
+                    // Hledame <span>, jenz obsahuje cenu za noc
+                    WebElement pricePerNightElement = wait.until(ExpectedConditions.visibilityOfElementLocated(
+                            By.xpath("//span[contains(text(), 'za noc')]")));
+
+                    //zbirame cenu
+                    String rawText = pricePerNightElement.getText(); // например "€ 55 za noc"
+
+                    //nechavame pouze jeji cislovou cast a davame je do tridy
+                    String priceText = rawText.replaceAll("[^\\d,]", "").replace(",", ".");
+                    double pricePerNight = Double.parseDouble(priceText);
+                    Listing.Price price = new Listing.Price(java.sql.Date.valueOf(checkInDate), pricePerNight);
+                    listing.addPrice(price);
                     //TODO: thread sleep for 500ms, then addprices etc - partly done, needs testing
-                    System.out.println("✔ Дата установлена: " + checkInStr + " → " + checkOutStr);
+                    System.out.println("Datum byl uspesne zpracovan: " + checkInStr + " → " + checkOutStr);
                 } catch (Exception e) {
-                    System.out.println("⚠ Ошибка при дате " + checkInStr + ": " + e.getMessage());
+                    System.out.println("Datum nebul zpracovan " + checkInStr + ": " + e.getMessage());
                 }
             }
 
 
         } catch (Exception e) {
-            System.out.println("✖ Ошибка при открытии листинга: " + e.getMessage());
+            System.out.println("Chyba behem otevirani listingu: " + e.getMessage());
         } finally {
             // Закрываем драйвер
             localDriver.quit();
-            System.out.println("✖ Закрыт драйвер для листинга: " + listing.getTitle());
+            System.out.println("Driver byl zavren pro listing: " + listing.getTitle());
         }
     }
 
@@ -254,7 +255,7 @@ public class AirbnbPriceCrawler {
 
             return true;
         } catch (Exception e) {
-            System.out.println("⚠ Невозможно установить даты " + checkIn + " → " + checkOut + ": " + e.getMessage());
+            System.out.println("Nelze aplikovat daty: " + checkIn + " a " + checkOut + ": " + e.getMessage());
             return false;
         }
     }
@@ -266,12 +267,6 @@ public class AirbnbPriceCrawler {
         } catch (NoSuchElementException e) {
             return false;
         }
-    }
-
-    // Допоміжний метод для парсингу ціни (замінює кому на крапку)
-    private double parseDoublePrice(String text) {
-        String clean = text.replaceAll("[^0-9,]", "").replace(",", ".");
-        return Double.parseDouble(clean);
     }
 
 
