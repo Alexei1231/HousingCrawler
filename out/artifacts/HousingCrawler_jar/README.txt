@@ -1,0 +1,1 @@
+Je potreba zpoustet soubor run.txt, tim padem se spusti i crawler, i konzola s logy. Program ukoncite zavrenim konzoly.
