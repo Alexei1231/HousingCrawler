@@ -1,6 +1,8 @@
 package model;
 
 
+import java.util.ArrayList;
+
 public class Host {
     private String name;
     private int numberOfListings;
@@ -14,6 +16,7 @@ public class Host {
     private String responseRate;
     private String responseTime;
 
+    private ArrayList<String> listings;
 
     // Конструктор, геттеры и сеттеры
     public Host(String name, String profileUrl) {
@@ -116,5 +119,17 @@ public class Host {
 
     public void increaseNumberOfListings() {
         numberOfListings++;
+    }
+
+    public ArrayList<String> getListings() {
+        return listings;
+    }
+
+    public void setListings(ArrayList<String> listings) {
+        this.listings = listings;
+    }
+
+    public void addListing(String listing) {
+        listings.add(listing);
     }
 }

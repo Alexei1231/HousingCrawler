@@ -23,7 +23,9 @@ public class AirbnbCrawler {
         this.wait = new WebDriverWait(driver, Duration.ofSeconds(10));
     }
 
-    public void crawl() throws InterruptedException, IOException {
+    public void crawl() throws InterruptedException, IOException {//hlavni metoda, ktera otevira stranku vyhledavani nabidek
+        //a pak hleda informace o kartickach, co se na ni nachazi, pak uz pracuje s jednotlivymni kartickami (otevira
+        // kazdou a hleda informaci)
         String searchUrl = "https://www.airbnb.cz/s/Praha/homes?currency=EUR";
         driver.get(searchUrl);
         Thread.sleep(5000);
@@ -78,7 +80,7 @@ public class AirbnbCrawler {
                     // Odkaz na detail nabidky
                     String href = card.findElement(By.cssSelector("a[href*='/rooms/']")).getAttribute("href");
                     listing.setUrl(href);
-                    crawlFromCard(driver, listing, href);
+                    crawlFromCard(driver, listing, href); //vyhledavani dalsich informaci o nabidce oteviranim jeji karticky
                     listings.add(listing);
                 } catch (Exception e) {
                     System.out.println("Chyba pri zpracovani karty: " + e.getMessage());
