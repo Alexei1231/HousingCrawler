@@ -14,13 +14,13 @@ public class MainBNB {
 //        crawler.crawl();
 //        JsonToExcel jsonToExcel = new JsonToExcel();
 //        jsonToExcel.xlsxConverter("airbnb_results.json");
-        System.out.println("Prosim napiste stranku, kterou chcete skenovat");
+        System.out.println("Prosim zadejte odkaz na stranku, kterou chcete skenovat");
         Scanner scanner = new Scanner(System.in);
         String url = scanner.nextLine();
         AirbnbHostCrawler crawler = new AirbnbHostCrawler(url);
         crawler.crawl();
 
-
+        System.exit(0);
     }
 
 }

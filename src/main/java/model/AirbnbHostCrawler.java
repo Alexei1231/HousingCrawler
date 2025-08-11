@@ -122,7 +122,8 @@ public class AirbnbHostCrawler {
         }
 
         JavascriptExecutor js = (JavascriptExecutor) driver;
-        js.executeScript("window.scrollTo(0, 500)");
+
+        js.executeScript("window.scrollTo(0, 650)");//opustime se na strance do mista, kde se nachazeji nabidky
 
         //a tady budeme (podobne jako v metode crawl v tride AirbnbCrawler) pak pracovat i s jednotlivymi nabidkami metodou
         //initializujeme ArrayList pro hosta, ktery mu pak na konci "dame"
@@ -130,15 +131,34 @@ public class AirbnbHostCrawler {
 
 
         WebElement showAllButton = null;
-        ExecutorService executor = Executors.newFixedThreadPool(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);//pocet vlaken
 
         try { //v tomto try catch bloku proverime, zda bude najdene tlacitko, ktere otevira vsechny nabidky; pokud ne, tak pracujeme
             // ryze s tim, co je na strance uzivatele
             showAllButton = new WebDriverWait(driver, Duration.ofSeconds(3))
-                    .until(ExpectedConditions.visibilityOfElementLocated(By.xpath(".//button[starts-with(normalize-space(), 'Zobrazit všechny uživatelovy nabídky')]")));
+                    .until(ExpectedConditions.visibilityOfElementLocated(
+                            By.xpath(".//button[starts-with(normalize-space(), 'Zobrazit všechny uživatelovy nabídky')]")
+                    ));
             showAllButton.click();
-            Thread.sleep(3000);
+            Thread.sleep(2000);
 
+// pokud je nalezeno tlacitko "Zobrazit dalsi nabidky", tiskneme na nej
+            while (true) {
+                try {
+                    WebElement moreButton = new WebDriverWait(driver, Duration.ofSeconds(2))
+                            .until(ExpectedConditions.elementToBeClickable(
+                                    By.xpath(".//button[normalize-space()='Zobrazit další nabídky']")
+                            ));
+
+                    ((JavascriptExecutor) driver).executeScript("arguments[0].scrollIntoView(true);", moreButton);
+                    moreButton.click();
+                    Thread.sleep(2000); // подождать, пока прогрузятся новые карточки
+                } catch (TimeoutException e) {
+                    break; // кнопка больше не появляется
+                }
+            }
+
+// Кdyz je vsechno hotovo, zbirame karticky
             List<WebElement> cards = driver.findElements(By.cssSelector("div[data-testid='card-container']"));
             System.out.println("Na strance se naslo tolik nabidek: " + cards.size());
 
@@ -163,10 +183,10 @@ public class AirbnbHostCrawler {
                     System.out.println("Chyba pri zpracovani karty: " + e.getMessage());
                 }
             }
-            // spoustime vsechny vlakna a cekame, az se dokonci prace s nimi
+
+// zpustime vsechny vlakna
             try {
                 List<Future<Void>> futures = executor.invokeAll(tasks);
-
                 for (Future<Void> future : futures) {
                     try {
                         future.get();
@@ -179,16 +199,32 @@ public class AirbnbHostCrawler {
                 executor.shutdownNow();
                 throw e2;
             }
+
         } catch (TimeoutException e) {
             List<Callable<Void>> tasks = new ArrayList<>();
-            List<WebElement> cards = driver.findElements(By.xpath("//div[.//div[@data-testid='listing-card-title']]"));
-            System.out.println("Na strance se naslo tolik nabidek: " + cards.size());
+            Set<String> processedUrls = new HashSet<>(); // Для защиты от дублей
 
+            List<WebElement> cards = driver.findElements(
+                    By.xpath("//div[.//*[@data-testid='listing-card-title']]")
+            );
+
+            System.out.println("Na stránce se našlo tolik nabídek: " + cards.size());
+
+            String currentPage = driver.getCurrentUrl(); // Чтобы избежать зацикливания на себе
 
             for (WebElement card : cards) {
                 try {
                     String title = card.findElement(By.cssSelector("[data-testid='listing-card-title']")).getText();
-                    String href = card.findElement(By.cssSelector("a[href*='/rooms/']")).getAttribute("href");
+                    String href = card.findElement(By.xpath(".//a[contains(@href, '/rooms/')]"))
+                            .getAttribute("href");
+
+                    // Проверка на дубликат и на текущую страницу
+                    if (processedUrls.contains(href) || href.equals(currentPage)) {
+                        System.out.println("Přeskočeno duplicitní nebo stejná stránka: " + href);
+                        continue;
+                    }
+
+                    processedUrls.add(href);
 
                     Listing listing = new Listing(title);
                     listings.add(listing);
@@ -201,13 +237,12 @@ public class AirbnbHostCrawler {
                     tasks.add(task);
 
                 } catch (Exception e1) {
-                    System.out.println("Chyba pri zpracovani karty: " + e1.getMessage());
+                    System.out.println("Chyba při zpracování karty: " + e1.getMessage());
                 }
             }
-            // spoustime vsechny vlakna a cekame, az se dokonci prace s nimi
+
             try {
                 List<Future<Void>> futures = executor.invokeAll(tasks);
-
                 for (Future<Void> future : futures) {
                     try {
                         future.get();
@@ -220,6 +255,8 @@ public class AirbnbHostCrawler {
                 executor.shutdownNow();
                 throw e2;
             }
+
+
         }
 
 
@@ -234,22 +271,89 @@ public class AirbnbHostCrawler {
         WebDriver localDriver = new EdgeDriver(options);
         WebDriverWait wait = new WebDriverWait(localDriver, Duration.ofSeconds(10));
 
+        localDriver.get(url);
+
         try {
-            localDriver.get(url);
 
-            // Počkej 3 sekundy, aby se stránka načetla (případně můžeš změnit nebo odstranit)
-            Thread.sleep(3000);
+            try {
+                // Pokus o zavření případného popup okna
+                WebElement closePopupButton = wait.until(ExpectedConditions.elementToBeClickable(By.cssSelector("button[aria-label='Zavřít']")));
+                closePopupButton.click();
+                Thread.sleep(1500);
+            } catch (TimeoutException | NoSuchElementException ignored) {
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
 
-            // TODO: tady můžeš později přidat parsování informací z detailu
+            // Popis nabídky
+            WebElement descElement = wait.until(ExpectedConditions.presenceOfElementLocated(By.cssSelector("[data-section-id='DESCRIPTION_DEFAULT']")));
+            String description = descElement.getText().trim();
+            listing.setDescription(description);
 
-            System.out.println("Stránka načtena pro listing: " + listing.getTitle());
 
-        } catch (Exception e) {
-            System.out.println("Chyba při otevírání listingu: " + e.getMessage());
-        } finally {
-            localDriver.quit();
-            System.out.println("Okno zavřeno pro listing: " + listing.getTitle());
+            // Získání info položek
+            List<WebElement> infoItems = driver.findElements(By.cssSelector("ol.lgx66tx li"));
+
+            int guests = 0;
+            int bedrooms = 0;
+            int beds = 0;
+            int bathrooms = 0;
+
+            for (WebElement item : infoItems) {
+                String text = item.getText().toLowerCase().trim();
+
+                if (text.contains("hosté") || text.contains("hostů")) {
+                    Matcher matcher = Pattern.compile("(\\d+)\\s+host").matcher(text);
+                    if (matcher.find()) {
+                        guests = Integer.parseInt(matcher.group(1));
+                    }
+                }
+
+                if (text.contains("ložnic")) {
+                    Matcher matcher = Pattern.compile("(\\d+)\\s+ložnic").matcher(text);
+                    if (matcher.find()) {
+                        bedrooms = Integer.parseInt(matcher.group(1));
+                    }
+                } else if (text.contains("ložnice")) {
+                    Matcher matcher = Pattern.compile("(\\d+)\\s+ložnice").matcher(text);
+                    if (matcher.find()) {
+                        bedrooms = Integer.parseInt(matcher.group(1));
+                    }
+                } else if (text.contains("studio")) {
+                    bedrooms = 1;
+                }
+
+                if (text.matches(".*\\d+\\s+(postel|lůžk|manželská|jednolůžk|patrová|dvoulůžk|přistýlk).*")) {
+                    Matcher matcher = Pattern.compile("(\\d+)\\s+(postel|lůžk|manželská|jednolůžk|patrová|dvoulůžk|přistýlk)").matcher(text.toLowerCase());
+                    if (matcher.find()) {
+                        beds = Integer.parseInt(matcher.group(1));
+                    }
+                }
+
+                if (text.contains("koupelna")) {
+                    if (text.contains("sdílená")) {
+                        bathrooms = 0;
+                    } else {
+                        Matcher matcher = Pattern.compile("(\\d+)\\s+(soukromá\\s+)?koupelna").matcher(text);
+                        if (matcher.find()) {
+                            bathrooms = Integer.parseInt(matcher.group(1));
+                        } else {
+                            bathrooms = 1;
+                        }
+                    }
+                }
+            }
+
+            listing.setMaxGuests(guests);
+            listing.setBedrooms(bedrooms);
+            listing.setBeds(beds);
+            listing.setBathrooms(bathrooms);
+        } catch (NoSuchElementException e) {
+            System.out.println("Chyba behem zpracovani nabidky");
         }
+        localDriver.close();
     }
-
 }
+
+
+
