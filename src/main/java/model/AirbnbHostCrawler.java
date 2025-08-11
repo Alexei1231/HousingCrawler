@@ -3,6 +3,7 @@ package model;
 import org.jspecify.annotations.Nullable;
 import org.openqa.selenium.*;
 import org.openqa.selenium.NoSuchElementException;
+import org.openqa.selenium.TimeoutException;
 import org.openqa.selenium.edge.EdgeDriver;
 import org.openqa.selenium.edge.EdgeOptions;
 import org.openqa.selenium.support.ui.ExpectedConditions;
@@ -13,7 +14,7 @@ import java.io.*;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.util.*;
-import java.util.concurrent.Callable;
+import java.util.concurrent.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -120,31 +121,110 @@ public class AirbnbHostCrawler {
             }
         }
 
-
+        JavascriptExecutor js = (JavascriptExecutor) driver;
+        js.executeScript("window.scrollTo(0, 500)");
 
         //a tady budeme (podobne jako v metode crawl v tride AirbnbCrawler) pak pracovat i s jednotlivymi nabidkami metodou
-        List<WebElement> cards = driver.findElements(By.cssSelector("div[data-testid='card-container']"));
-        System.out.println("Na strance se naslo tolik nabidek: " + cards.size());
-        for (WebElement card : cards) {
+        //initializujeme ArrayList pro hosta, ktery mu pak na konci "dame"
+        ArrayList<Listing> listings = new ArrayList<>();
+
+
+        WebElement showAllButton = null;
+        ExecutorService executor = Executors.newFixedThreadPool(1);
+
+        try { //v tomto try catch bloku proverime, zda bude najdene tlacitko, ktere otevira vsechny nabidky; pokud ne, tak pracujeme
+            // ryze s tim, co je na strance uzivatele
+            showAllButton = new WebDriverWait(driver, Duration.ofSeconds(3))
+                    .until(ExpectedConditions.visibilityOfElementLocated(By.xpath(".//button[starts-with(normalize-space(), 'Zobrazit všechny uživatelovy nabídky')]")));
+            showAllButton.click();
+            Thread.sleep(3000);
+
+            List<WebElement> cards = driver.findElements(By.cssSelector("div[data-testid='card-container']"));
+            System.out.println("Na strance se naslo tolik nabidek: " + cards.size());
+
+            List<Callable<Void>> tasks = new ArrayList<>();
+
+            for (WebElement card : cards) {
+                try {
+                    String title = card.findElement(By.cssSelector("[data-testid='listing-card-title']")).getText();
+                    String href = card.findElement(By.cssSelector("a[href*='/rooms/']")).getAttribute("href");
+
+                    Listing listing = new Listing(title);
+                    listings.add(listing);
+
+                    Callable<Void> task = () -> {
+                        crawlFromCard(listing, href + "?locale=cs&currency=EUR");
+                        return null;
+                    };
+
+                    tasks.add(task);
+
+                } catch (Exception e) {
+                    System.out.println("Chyba pri zpracovani karty: " + e.getMessage());
+                }
+            }
+            // spoustime vsechny vlakna a cekame, az se dokonci prace s nimi
             try {
-                String title = card.findElement(By.cssSelector("[data-testid='listing-card-title']")).getText();
-                String href = card.findElement(By.cssSelector("a[href*='/rooms/']")).getAttribute("href");
+                List<Future<Void>> futures = executor.invokeAll(tasks);
 
-                Listing listing = new Listing(title);
-                ButtonGroup listings = null;
-                listings.add(listing);
+                for (Future<Void> future : futures) {
+                    try {
+                        future.get();
+                    } catch (ExecutionException ee) {
+                        System.out.println("Chyba v tasku: " + ee.getCause());
+                    }
+                }
+            } catch (InterruptedException e2) {
+                System.out.println("Přerušeno při čekání na dokončení úloh");
+                executor.shutdownNow();
+                throw e2;
+            }
+        } catch (TimeoutException e) {
+            List<Callable<Void>> tasks = new ArrayList<>();
+            List<WebElement> cards = driver.findElements(By.xpath("//div[.//div[@data-testid='listing-card-title']]"));
+            System.out.println("Na strance se naslo tolik nabidek: " + cards.size());
 
-                Callable<Void> task = () -> {
-                    crawlFromCard(listing, href + "?locale=cs&currency=EUR");
-                    return null;
-                };
 
-                tasks.add(task);
+            for (WebElement card : cards) {
+                try {
+                    String title = card.findElement(By.cssSelector("[data-testid='listing-card-title']")).getText();
+                    String href = card.findElement(By.cssSelector("a[href*='/rooms/']")).getAttribute("href");
 
-            } catch (Exception e) {
-                System.out.println("Chyba pri zpracovani karty: " + e.getMessage());
+                    Listing listing = new Listing(title);
+                    listings.add(listing);
+
+                    Callable<Void> task = () -> {
+                        crawlFromCard(listing, href + "?locale=cs&currency=EUR");
+                        return null;
+                    };
+
+                    tasks.add(task);
+
+                } catch (Exception e1) {
+                    System.out.println("Chyba pri zpracovani karty: " + e1.getMessage());
+                }
+            }
+            // spoustime vsechny vlakna a cekame, az se dokonci prace s nimi
+            try {
+                List<Future<Void>> futures = executor.invokeAll(tasks);
+
+                for (Future<Void> future : futures) {
+                    try {
+                        future.get();
+                    } catch (ExecutionException ee) {
+                        System.out.println("Chyba v tasku: " + ee.getCause());
+                    }
+                }
+            } catch (InterruptedException e2) {
+                System.out.println("Přerušeno při čekání na dokončení úloh");
+                executor.shutdownNow();
+                throw e2;
             }
         }
+
+
+        host.setListings(listings);
+
     }
 
     public void crawlFromCard(Listing listing, String url) {

@@ -16,7 +16,7 @@ public class Host {
     private String responseRate;
     private String responseTime;
 
-    private ArrayList<String> listings;
+    private ArrayList<Listing> listings;
 
     // Конструктор, геттеры и сеттеры
     public Host(String name, String profileUrl) {
@@ -121,15 +121,15 @@ public class Host {
         numberOfListings++;
     }
 
-    public ArrayList<String> getListings() {
+    public ArrayList<Listing> getListings() {
         return listings;
     }
 
-    public void setListings(ArrayList<String> listings) {
+    public void setListings(ArrayList<Listing> listings) {
         this.listings = listings;
     }
 
-    public void addListing(String listing) {
+    public void addListing(Listing listing) {
         listings.add(listing);
     }
 }
