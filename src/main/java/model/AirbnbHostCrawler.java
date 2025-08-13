@@ -377,17 +377,24 @@ public class AirbnbHostCrawler {
                     }
                     Thread.sleep(1000);
                     // Hledame <span>, jenz obsahuje cenu za noc
-                    // Ждём, пока на странице появится элемент с видимым числом и "za noc"
+                    // Ждём и собираем текст цены через JS
                     String priceText = (String) ((JavascriptExecutor) driver).executeScript(
-                            "var spans = document.querySelectorAll('span');" +
-                                    "for (var i=0;i<spans.length;i++) {" +
-                                    "  var el = spans[i];" +
-                                    "  if (el.offsetParent !== null && el.innerText.match(/\\d+[\\.,]?\\d*/)) {" +
-                                    "    return el.innerText;" +
+                            "var blocks = document.querySelectorAll('div');" +
+                                    "for (var i=0;i<blocks.length;i++) {" +
+                                    "  var block = blocks[i];" +
+                                    "  if (block.offsetParent !== null) {" + // видимый блок
+                                    "    var spans = block.querySelectorAll('span');" +
+                                    "    for (var j=0;j<spans.length;j++) {" +
+                                    "      var s = spans[j];" +
+                                    "      if (s.offsetParent !== null && s.innerText.includes('za noc')) {" +
+                                    "        return s.innerText;" +
+                                    "      }" +
+                                    "    }" +
                                     "  }" +
                                     "}" +
                                     "return null;"
                     );
+
 
                     if (priceText == null) {
                         System.out.println("Не удалось получить цену через JS для даты " + checkInStr);
@@ -404,7 +411,6 @@ public class AirbnbHostCrawler {
                     } else {
                         System.out.println("Не удалось распарсить цену из JS текста: " + priceText);
                     }
-
 
                     //TODO: thread sleep for 500ms, then addprices etc - partly done, needs testing
                     System.out.println("Datum byl uspesne zpracovan: " + checkInStr + " → " + checkOutStr);
