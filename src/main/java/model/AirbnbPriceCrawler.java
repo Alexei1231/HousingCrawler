@@ -101,8 +101,7 @@ public class AirbnbPriceCrawler {
             break;
         }
 
-        executor.shutdown();
-        executor.awaitTermination(1, TimeUnit.HOURS);
+
 
         // Сохраняем результат
         com.google.gson.Gson gson = new com.google.gson.GsonBuilder().setPrettyPrinting().create();
@@ -111,6 +110,8 @@ public class AirbnbPriceCrawler {
             System.out.println("Ulozeno " + listings.size() + " nabidek do JSON.");
         }
 
+        executor.shutdown();
+        executor.awaitTermination(1, TimeUnit.HOURS);
         driver.quit();
     }
 

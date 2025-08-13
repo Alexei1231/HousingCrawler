@@ -60,6 +60,7 @@ public class Listing {
     // Конструктор, геттеры и сеттеры
     public Listing(String title) {
         this.title = title;
+        this.priceArrayList = new ArrayList<Price>();
     }
 
     // Геттеры и сеттеры
