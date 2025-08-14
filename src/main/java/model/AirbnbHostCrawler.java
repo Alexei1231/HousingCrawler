@@ -132,7 +132,7 @@ public class AirbnbHostCrawler {
 
 
         WebElement showAllButton = null;
-        ExecutorService executor = Executors.newFixedThreadPool(1);//pocet vlaken
+        ExecutorService executor = Executors.newFixedThreadPool(3);//pocet vlaken
 
         try { //v tomto try catch bloku proverime, zda bude najdene tlacitko, ktere otevira vsechny nabidky; pokud ne, tak pracujeme
             // ryze s tim, co je na strance uzivatele
@@ -360,7 +360,7 @@ public class AirbnbHostCrawler {
             // Тут позже будет логика парсинга
             DateTimeFormatter formatter = DateTimeFormatter.ofPattern("d. M. yyyy");
             LocalDate startDate = LocalDate.now().plusDays(1); // Zitra
-            LocalDate endDate = startDate.plusDays(25);//v production ready verzi je potreba nastavit 365
+            LocalDate endDate = startDate.plusDays(100);//v production ready verzi je potreba nastavit 365
 
             for (LocalDate checkInDate = startDate; checkInDate.isBefore(endDate); checkInDate = checkInDate.plusDays(1)) {
                 LocalDate checkOutDate = checkInDate.plusDays(1);
@@ -377,27 +377,35 @@ public class AirbnbHostCrawler {
                     }
                     Thread.sleep(1000);
                     // Hledame <span>, jenz obsahuje cenu za noc
-                    // Ждём и собираем текст цены через JS
+
                     String priceText = (String) ((JavascriptExecutor) driver).executeScript(
-                            "var blocks = document.querySelectorAll('div');" +
-                                    "for (var i=0;i<blocks.length;i++) {" +
+                            "var blocks = document.querySelectorAll('div._1k1ce2w');" +
+                                    "for (var i = 0; i < blocks.length; i++) {" +
                                     "  var block = blocks[i];" +
-                                    "  if (block.offsetParent !== null) {" + // видимый блок
+                                    "  if (block.offsetParent !== null) {" + // видимый блок" +
+                                    "    var matches = [];" +
                                     "    var spans = block.querySelectorAll('span');" +
-                                    "    for (var j=0;j<spans.length;j++) {" +
+                                    "    for (var j = 0; j < spans.length; j++) {" +
                                     "      var s = spans[j];" +
-                                    "      if (s.offsetParent !== null && s.innerText.includes('za noc')) {" +
-                                    "        return s.innerText;" +
+                                    "      if (s.offsetParent !== null) {" +
+                                    "        var m = s.innerText.match(/€\\s*(\\d+[\\.,]?\\d*)/);" +
+                                    "        if (m && m[1]) matches.push(m[1]);" +
                                     "      }" +
                                     "    }" +
+                                    "    if (matches.length > 0) return matches[matches.length - 1];" + // последнее число" +
                                     "  }" +
                                     "}" +
                                     "return null;"
                     );
 
+                    System.out.println("Cena za 1 noc: " + priceText);
+
+
+
+
 
                     if (priceText == null) {
-                        System.out.println("Не удалось получить цену через JS для даты " + checkInStr);
+                        System.out.println("Nepodarilo se ziskat cenu pro datum: " + checkInStr);
                         continue;
                     }
 
@@ -415,7 +423,7 @@ public class AirbnbHostCrawler {
                     //TODO: thread sleep for 500ms, then addprices etc - partly done, needs testing
                     System.out.println("Datum byl uspesne zpracovan: " + checkInStr + " → " + checkOutStr);
                 } catch (Exception e) {
-                    System.out.println("Datum nebul zpracovan " + checkInStr + ": " + e.getMessage());
+                    System.out.println("Datum nebyl zpracovan " + checkInStr + ": " + e.getMessage());
                 }
             }
 

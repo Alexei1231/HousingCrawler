@@ -1,10 +1,12 @@
 package files;
 
 import com.google.gson.*;
+import com.google.gson.reflect.TypeToken;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
 import java.io.*;
+import java.lang.reflect.Type;
 import java.util.*;
 
 public class JsonToExcel {
@@ -87,6 +89,92 @@ public class JsonToExcel {
             } else if (val.isJsonArray()) {
                 flat.put(key, val.toString()); // Array jako text
             }
+        }
+    }
+
+    public void jsonToExcelForPrices(String jsonFilePath) throws IOException {
+        // Читаем JSON с помощью Gson
+        String excelFilePath = "bnb_listings.xlsx";
+        Gson gson = new Gson();
+        Reader reader = new FileReader(jsonFilePath);
+        Type listType = new TypeToken<List<Map<String, Object>>>() {
+        }.getType();
+        List<Map<String, Object>> listings = gson.fromJson(reader, listType);
+        reader.close();
+
+        try (Workbook workbook = new XSSFWorkbook()) {
+            Sheet sheet = workbook.createSheet("Listings");
+
+            // Заголовок
+            Row headerRow = sheet.createRow(0);
+            int headerCol = 0;
+            headerRow.createCell(headerCol++).setCellValue("Title");
+            headerRow.createCell(headerCol++).setCellValue("Location");
+
+            // Собираем уникальные даты с ценами
+            Set<String> allDates = new LinkedHashSet<>();
+            for (Map<String, Object> listing : listings) {
+                List<Map<String, Object>> prices = (List<Map<String, Object>>) listing.get("priceArrayList");
+                if (prices != null) {
+                    for (Map<String, Object> priceEntry : prices) {
+                        if (priceEntry.get("price") != null) {
+                            allDates.add((String) priceEntry.get("date"));
+                        }
+                    }
+                }
+            }
+
+            List<String> dateList = new ArrayList<>(allDates);
+            for (String date : dateList) {
+                headerRow.createCell(headerCol++).setCellValue(date);
+            }
+
+            // Данные
+            int rowIdx = 1;
+            for (Map<String, Object> listing : listings) {
+                Row row = sheet.createRow(rowIdx++);
+                int colIdx = 0;
+
+                // Название и локация
+                row.createCell(colIdx++).setCellValue((String) listing.get("title"));
+                row.createCell(colIdx++).setCellValue((String) listing.get("location"));
+
+                // Цены в Map для быстрого поиска
+                Map<String, Double> priceMap = new HashMap<>();
+                List<Map<String, Object>> prices = (List<Map<String, Object>>) listing.get("priceArrayList");
+                if (prices != null) {
+                    for (Map<String, Object> priceEntry : prices) {
+                        String date = (String) priceEntry.get("date");
+                        Double price = (priceEntry.get("price") instanceof Number)
+                                ? ((Number) priceEntry.get("price")).doubleValue()
+                                : null;
+                        if (price != null) {
+                            priceMap.put(date, price);
+                        }
+                    }
+                }
+
+                // Заполняем цены по датам
+                for (String date : dateList) {
+                    if (priceMap.containsKey(date)) {
+                        row.createCell(colIdx++).setCellValue(priceMap.get(date));
+                    } else {
+                        row.createCell(colIdx++).setBlank(); // недоступно → пусто
+                    }
+                }
+            }
+
+            // Авторазмер
+            for (int i = 0; i < headerCol; i++) {
+                sheet.autoSizeColumn(i);
+            }
+
+            // Сохраняем файл
+            FileOutputStream out = new FileOutputStream(excelFilePath);
+            workbook.write(out);
+            out.close();
+
+            System.out.println("✅ Excel успешно создан: " + excelFilePath);
         }
     }
 }

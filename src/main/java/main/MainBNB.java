@@ -20,7 +20,7 @@ public class MainBNB {
         AirbnbHostCrawler crawler = new AirbnbHostCrawler(url);
         crawler.crawl();
         JsonToExcel jsonToExcel = new JsonToExcel();
-        jsonToExcel.xlsxConverter("airbnb_results.json");
+        jsonToExcel.jsonToExcelForPrices("airbnb_results.json");
         System.exit(0);
     }
 
