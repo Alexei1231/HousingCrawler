@@ -1,5 +1,6 @@
 package model;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Date;
 
@@ -28,6 +29,10 @@ public class Listing {
         public Price(Date date, double price) {
             this.date = date;
             this.price = price;
+        }
+
+        public Price(Date date) {
+            this.date = date;
         }
     }
 

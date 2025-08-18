@@ -132,7 +132,7 @@ public class AirbnbHostCrawler {
 
 
         WebElement showAllButton = null;
-        ExecutorService executor = Executors.newFixedThreadPool(3);//pocet vlaken
+        ExecutorService executor = Executors.newFixedThreadPool(6);//POCET VLAKEN
 
         try { //v tomto try catch bloku proverime, zda bude najdene tlacitko, ktere otevira vsechny nabidky; pokud ne, tak pracujeme
             // ryze s tim, co je na strance uzivatele
@@ -303,23 +303,101 @@ public class AirbnbHostCrawler {
             String description = descElement.getText().trim();
             listing.setDescription(description);
 
-//            JavascriptExecutor js = (JavascriptExecutor) localDriver;
-//            js.executeScript("window.scrollTo(0, 300)");
-//            Thread.sleep(10000);
+            //!!!LOCATION!!!
+//            WebElement locationDiv = wait.until(ExpectedConditions
+//                    .visibilityOfElementLocated(By.cssSelector("div.s1qk96pm.atm_gq_p5ox87.dir.dir-ltr")));
 //
+//            listing.setLocation(locationDiv.getText());
+
+            //!!!REVIEW COUNT AND AVERAGE REVIEW MARK!!!
+
+//            WebElement ratingContainer = wait.until(ExpectedConditions
+//                    .visibilityOfElementLocated(By.cssSelector("div.r1dxllyb.atm_gq_p5ox87.dir.dir-ltr")));
+//
+//            List<WebElement> ratingSpans = ratingContainer.findElements(By.cssSelector("span"));
+
+// prumerne hodnoceni
+//            double averageRating = 0.0;
+//            if (!ratingSpans.isEmpty()) {
+//                try {
+//                    averageRating = Double.parseDouble(ratingSpans.get(0).getText().replace(",", "."));
+//                } catch (NumberFormatException e) {
+//                    System.out.println("Не удалось преобразовать рейтинг: " + ratingSpans.get(0).getText());
+//                }
+//            }
+
+// pocet hodnoceni
+//            int reviewCount = 0;
+//            if (ratingSpans.size() > 1) {
+//                String reviewText = ratingSpans.get(1).getText(); // например "(128 hodnocení)"
+//                reviewText = reviewText.replaceAll("[^0-9]", ""); // оставляем только цифры
+//                if (!reviewText.isEmpty()) {
+//                    reviewCount = Integer.parseInt(reviewText);
+//                }
+//            }
+//            listing.setRating(averageRating);
+//            listing.setReviewCount(reviewCount);
+
+            //!!!AMENITIES!!!
+            List<WebElement> infoItems = wait.until(ExpectedConditions
+                    .presenceOfAllElementsLocatedBy(By.cssSelector("ol.lgx66tx li")));
 
 
-            //zatim vse je nechano na 0 kvuli problemum s crawlingem
             int guests = 0;
             int bedrooms = 0;
             int beds = 0;
             int bathrooms = 0;
 
+            for (WebElement item : infoItems) {
+                String text = item.getText().toLowerCase().trim();
+
+                if (text.contains("hosté") || text.contains("hostů")) {
+                    Matcher matcher = Pattern.compile("(\\d+)\\s+host").matcher(text);
+                    if (matcher.find()) {
+                        guests = Integer.parseInt(matcher.group(1));
+                    }
+                }
+
+                if (text.contains("ložnic")) {
+                    Matcher matcher = Pattern.compile("(\\d+)\\s+ložnic").matcher(text);
+                    if (matcher.find()) {
+                        bedrooms = Integer.parseInt(matcher.group(1));
+                    }
+                } else if (text.contains("ložnice")) {
+                    Matcher matcher = Pattern.compile("(\\d+)\\s+ložnice").matcher(text);
+                    if (matcher.find()) {
+                        bedrooms = Integer.parseInt(matcher.group(1));
+                    }
+                } else if (text.contains("studio")) {
+                    bedrooms = 1;
+                }
+
+                if (text.matches(".*\\d+\\s+(postel|lůžk|manželská|jednolůžk|patrová|dvoulůžk|přistýlk).*")) {
+                    Matcher matcher = Pattern.compile("(\\d+)\\s+(postel|lůžk|manželská|jednolůžk|patrová|dvoulůžk|přistýlk)").matcher(text.toLowerCase());
+                    if (matcher.find()) {
+                        beds = Integer.parseInt(matcher.group(1));
+                    }
+                }
+
+                if (text.contains("koupelna")) {
+                    if (text.contains("sdílená")) {
+                        bathrooms = 0;
+                    } else {
+                        Matcher matcher = Pattern.compile("(\\d+)\\s+(soukromá\\s+)?koupelna").matcher(text);
+                        if (matcher.find()) {
+                            bathrooms = Integer.parseInt(matcher.group(1));
+                        } else {
+                            bathrooms = 1;
+                        }
+                    }
+                }
+            }
 
             listing.setMaxGuests(guests);
             listing.setBedrooms(bedrooms);
             listing.setBeds(beds);
             listing.setBathrooms(bathrooms);
+
 
         } catch (NoSuchElementException e) {
             System.out.println("Chyba behem zpracovani nabidky");
@@ -373,11 +451,12 @@ public class AirbnbHostCrawler {
 
                     if (!success) {
                         System.out.println("Preskocili jsme datum: " + checkInStr);
+                        listing.addPrice(new Listing.Price(java.sql.Date.valueOf(checkInDate), -1));
                         continue; // идем к следующей дате
                     }
-                    Thread.sleep(1000);
-                    // Hledame <span>, jenz obsahuje cenu za noc
+                    Thread.sleep(1500); //!!!ČEKÁNÍ NA ODPOVĚĎ SERVERU!!! TODO: UDĚLEJ NASTAVITELNÝ ČAS
 
+                    // Hledame <span>, jenz obsahuje cenu za noc
                     String priceText = (String) ((JavascriptExecutor) driver).executeScript(
                             "var blocks = document.querySelectorAll('div._1k1ce2w');" +
                                     "for (var i = 0; i < blocks.length; i++) {" +
@@ -401,9 +480,6 @@ public class AirbnbHostCrawler {
                     System.out.println("Cena za 1 noc: " + priceText);
 
 
-
-
-
                     if (priceText == null) {
                         System.out.println("Nepodarilo se ziskat cenu pro datum: " + checkInStr);
                         continue;
@@ -420,7 +496,6 @@ public class AirbnbHostCrawler {
                         System.out.println("Не удалось распарсить цену из JS текста: " + priceText);
                     }
 
-                    //TODO: thread sleep for 500ms, then addprices etc - partly done, needs testing
                     System.out.println("Datum byl uspesne zpracovan: " + checkInStr + " → " + checkOutStr);
                 } catch (Exception e) {
                     System.out.println("Datum nebyl zpracovan " + checkInStr + ": " + e.getMessage());
@@ -457,12 +532,12 @@ public class AirbnbHostCrawler {
                     By.cssSelector("[data-testid='bookit-sidebar-availability-calendar']")
             ));
 
-            System.out.println("✔ Календарь открыт");
+            System.out.println("✔ Kalendar byl otevren");
 
         } catch (ElementClickInterceptedException e) {
-            System.out.println("⚠ Не удалось кликнуть по элементу открытия календаря: " + e.getMessage());
+            System.out.println("⚠ Nepodarilo se  clicknout na element kalendare - datum neni dostupny");
         } catch (Exception e) {
-            System.out.println("⚠ Ошибка при попытке открыть календарь: " + e.getMessage());
+            System.out.println("⚠ Chyba pri pokusu otevreni kalendare: " + e.getMessage());
         }
     }
 
@@ -499,7 +574,7 @@ public class AirbnbHostCrawler {
 
             return true;
         } catch (Exception e) {
-            System.out.println("Nelze aplikovat daty: " + checkIn + " a " + checkOut + ": " + e.getMessage());
+            System.out.println("Nelze aplikovat data: " + checkIn + " a " + checkOut + ": " + e.getMessage());
             return false;
         }
     }
@@ -514,6 +589,3 @@ public class AirbnbHostCrawler {
     }
 
 }
-
-
-

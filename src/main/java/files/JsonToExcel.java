@@ -138,6 +138,7 @@ public class JsonToExcel {
                 // Название и локация
                 row.createCell(colIdx++).setCellValue((String) listing.get("title"));
                 row.createCell(colIdx++).setCellValue((String) listing.get("location"));
+                row.createCell(colIdx++).setCellValue((String) listing.get("url"));
 
                 // Цены в Map для быстрого поиска
                 Map<String, Double> priceMap = new HashMap<>();

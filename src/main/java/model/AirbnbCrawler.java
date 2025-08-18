@@ -144,7 +144,7 @@ public class AirbnbCrawler {
             String description = descElement.getText().trim();
             listing.setDescription(description);
 
-            // ✅ Získání check-in data
+            // Získání check-in data
             try {
                 WebElement checkInElement = driver.findElement(By.cssSelector("div[data-testid='change-dates-checkIn']"));
                 String checkInDate = checkInElement.getText().trim();

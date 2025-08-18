@@ -1,5 +1,7 @@
 package model;
 
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import org.openqa.selenium.*;
 import org.openqa.selenium.NoSuchElementException;
 import org.openqa.selenium.TimeoutException;
@@ -10,6 +12,7 @@ import org.openqa.selenium.support.ui.ExpectedConditions;
 import org.openqa.selenium.support.ui.WebDriverWait;
 
 import java.io.*;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -84,31 +87,20 @@ public class AirbnbPriceCrawler {
                 throw e;
             }
 
-            // Prechod na pristi stranku
-//            List<WebElement> buttons = driver.findElements(By.xpath("//a[text()='" + pageNum + "']"));
-//            if (!buttons.isEmpty()) {
-//                try {
-//                    buttons.get(0).click();
-//                    pageNum++;
-//                } catch (Exception e) {
-//                    System.out.println("Chyba pri kliknuti na dalsi stranku");
-//                    break;
-//                }
-//            } else {
-//                System.out.println("Posledni stranka, ukonceni.");
-//                break;
-//            }
+
             break;
         }
 
 
-
-        // Сохраняем результат
-        com.google.gson.Gson gson = new com.google.gson.GsonBuilder().setPrettyPrinting().create();
-        try (FileWriter writer = new FileWriter("airbnb_results.json")) {
+        // Сохраняем результат в UTF-8
+        Gson gson = new GsonBuilder().setPrettyPrinting().create();
+        try (Writer writer = new OutputStreamWriter(new FileOutputStream("airbnb_results.json"), StandardCharsets.UTF_8)) {
             gson.toJson(listings, writer);
-            System.out.println("Ulozeno " + listings.size() + " nabidek do JSON.");
+            System.out.println("Uloženo " + listings.size() + " nabídek do JSON.");
+        } catch (IOException e) {
+            e.printStackTrace();
         }
+
 
         executor.shutdown();
         executor.awaitTermination(1, TimeUnit.HOURS);
