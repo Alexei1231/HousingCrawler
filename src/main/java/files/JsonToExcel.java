@@ -73,7 +73,7 @@ public class JsonToExcel {
         workbook.close();
 
         System.out.println("✅ Excel soubor byl úspěšně vytvořen: output_bnb.xlsx");
-    }
+    }//Jednouducha konverze pro BNB crawler
 
     private static void flattenJson(String prefix, JsonObject jsonObj, Map<String, String> flat) {
         for (Map.Entry<String, JsonElement> entry : jsonObj.entrySet()) {
@@ -92,8 +92,8 @@ public class JsonToExcel {
         }
     }
 
-    public void jsonToExcelForPrices(String jsonFilePath) throws IOException {
-        // Читаем JSON с помощью Gson
+    public void jsonToExcelForPrices(String jsonFilePath) throws IOException {//Ukladani nazev-url-cena
+        // nacitame JSON pomoci GSON-u
         String excelFilePath = "bnb_listings.xlsx";
         Gson gson = new Gson();
         Reader reader = new FileReader(jsonFilePath);
@@ -105,13 +105,13 @@ public class JsonToExcel {
         try (Workbook workbook = new XSSFWorkbook()) {
             Sheet sheet = workbook.createSheet("Listings");
 
-            // Заголовок
+            // Zahlavi
             Row headerRow = sheet.createRow(0);
             int headerCol = 0;
             headerRow.createCell(headerCol++).setCellValue("Title");
-            headerRow.createCell(headerCol++).setCellValue("Location");
+            headerRow.createCell(headerCol++).setCellValue("Url");
 
-            // Собираем уникальные даты с ценами
+            // Sbitame unikatni data s cenami
             Set<String> allDates = new LinkedHashSet<>();
             for (Map<String, Object> listing : listings) {
                 List<Map<String, Object>> prices = (List<Map<String, Object>>) listing.get("priceArrayList");
@@ -129,18 +129,17 @@ public class JsonToExcel {
                 headerRow.createCell(headerCol++).setCellValue(date);
             }
 
-            // Данные
+
             int rowIdx = 1;
             for (Map<String, Object> listing : listings) {
                 Row row = sheet.createRow(rowIdx++);
                 int colIdx = 0;
 
-                // Название и локация
+                // Sloupce dat
                 row.createCell(colIdx++).setCellValue((String) listing.get("title"));
-                row.createCell(colIdx++).setCellValue((String) listing.get("location"));
                 row.createCell(colIdx++).setCellValue((String) listing.get("url"));
 
-                // Цены в Map для быстрого поиска
+                // Sbirani cen do mapu pro rychlejsi hledani
                 Map<String, Double> priceMap = new HashMap<>();
                 List<Map<String, Object>> prices = (List<Map<String, Object>>) listing.get("priceArrayList");
                 if (prices != null) {
@@ -155,7 +154,7 @@ public class JsonToExcel {
                     }
                 }
 
-                // Заполняем цены по датам
+                // Davame ceny podle dat
                 for (String date : dateList) {
                     if (priceMap.containsKey(date)) {
                         row.createCell(colIdx++).setCellValue(priceMap.get(date));
@@ -165,17 +164,147 @@ public class JsonToExcel {
                 }
             }
 
-            // Авторазмер
+            // autosize
             for (int i = 0; i < headerCol; i++) {
                 sheet.autoSizeColumn(i);
             }
 
-            // Сохраняем файл
+            // Ukladame soubor
             FileOutputStream out = new FileOutputStream(excelFilePath);
             workbook.write(out);
             out.close();
 
-            System.out.println("✅ Excel успешно создан: " + excelFilePath);
+            System.out.println("Excel soubor byl uspesne vytvoren: " + excelFilePath);
+        }
+    }
+
+
+    public void jsonToExcelForPricesExtended(String jsonFilePath) throws IOException {
+        String excelFilePath = "bnb_listings.xlsx";
+        Gson gson = new Gson();
+        Reader reader = new FileReader(jsonFilePath);
+        Type listType = new TypeToken<List<Map<String, Object>>>() {
+        }.getType();
+        List<Map<String, Object>> listings = gson.fromJson(reader, listType);
+        reader.close();
+
+        try (Workbook workbook = new XSSFWorkbook()) {
+            Sheet sheet = workbook.createSheet("Listings");
+
+            // Záhlaví
+            Row headerRow = sheet.createRow(0);
+            int headerCol = 0;
+            headerRow.createCell(headerCol++).setCellValue("Title");
+            headerRow.createCell(headerCol++).setCellValue("Url");
+            headerRow.createCell(headerCol++).setCellValue("Description");
+            headerRow.createCell(headerCol++).setCellValue("MaxGuests");
+            headerRow.createCell(headerCol++).setCellValue("Bedrooms");
+            headerRow.createCell(headerCol++).setCellValue("Beds");
+            headerRow.createCell(headerCol++).setCellValue("Bathrooms");
+
+            // Sečteme unikátní data s cenami
+            Set<String> allDates = new LinkedHashSet<>();
+            for (Map<String, Object> listing : listings) {
+                List<Map<String, Object>> prices = (List<Map<String, Object>>) listing.get("priceArrayList");
+                if (prices != null) {
+                    for (Map<String, Object> priceEntry : prices) {
+                        if (priceEntry.get("price") != null) {
+                            allDates.add((String) priceEntry.get("date"));
+                        }
+                    }
+                }
+            }
+
+            List<String> dateList = new ArrayList<>(allDates);
+            for (String date : dateList) {
+                headerRow.createCell(headerCol++).setCellValue(date);
+            }
+
+            int rowIdx = 1;
+            for (Map<String, Object> listing : listings) {
+                Row row = sheet.createRow(rowIdx++);
+                int colIdx = 0;
+
+                // Základní údaje
+                row.createCell(colIdx++).setCellValue((String) listing.get("title"));
+                row.createCell(colIdx++).setCellValue((String) listing.get("url"));
+
+                // Popis
+                String description = (String) listing.get("description");
+                if (description != null) {
+                    row.createCell(colIdx++).setCellValue(description);
+                } else {
+                    row.createCell(colIdx++).setBlank();
+                }
+
+                // MaxGuests
+                Number maxGuests = (Number) listing.get("maxGuests");
+                if (maxGuests != null) {
+                    row.createCell(colIdx++).setCellValue(maxGuests.doubleValue());
+                } else {
+                    row.createCell(colIdx++).setBlank();
+                }
+
+                // Bedrooms
+                Number bedrooms = (Number) listing.get("bedrooms");
+                if (bedrooms != null) {
+                    row.createCell(colIdx++).setCellValue(bedrooms.doubleValue());
+                } else {
+                    row.createCell(colIdx++).setBlank();
+                }
+
+                // Beds
+                Number beds = (Number) listing.get("beds");
+                if (beds != null) {
+                    row.createCell(colIdx++).setCellValue(beds.doubleValue());
+                } else {
+                    row.createCell(colIdx++).setBlank();
+                }
+
+                // Bathrooms
+                Number bathrooms = (Number) listing.get("bathrooms");
+                if (bathrooms != null) {
+                    row.createCell(colIdx++).setCellValue(bathrooms.doubleValue());
+                } else {
+                    row.createCell(colIdx++).setBlank();
+                }
+
+                // Map cen
+                Map<String, Double> priceMap = new HashMap<>();
+                List<Map<String, Object>> prices = (List<Map<String, Object>>) listing.get("priceArrayList");
+                if (prices != null) {
+                    for (Map<String, Object> priceEntry : prices) {
+                        String date = (String) priceEntry.get("date");
+                        Double price = (priceEntry.get("price") instanceof Number)
+                                ? ((Number) priceEntry.get("price")).doubleValue()
+                                : null;
+                        if (price != null) {
+                            priceMap.put(date, price);
+                        }
+                    }
+                }
+
+                // Ceny podle dat
+                for (String date : dateList) {
+                    if (priceMap.containsKey(date)) {
+                        row.createCell(colIdx++).setCellValue(priceMap.get(date));
+                    } else {
+                        row.createCell(colIdx++).setBlank();
+                    }
+                }
+            }
+
+            // Autosize
+            for (int i = 0; i < headerCol; i++) {
+                sheet.autoSizeColumn(i);
+            }
+
+            // Uložení souboru
+            FileOutputStream out = new FileOutputStream(excelFilePath);
+            workbook.write(out);
+            out.close();
+
+            System.out.println("Excel soubor byl úspěšně vytvořen: " + excelFilePath);
         }
     }
 }

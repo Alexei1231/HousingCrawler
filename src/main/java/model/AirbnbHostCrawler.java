@@ -23,12 +23,18 @@ public class AirbnbHostCrawler {
     private EdgeDriver driver;
     private WebDriverWait wait;
     private String url;//url to the host website
+    private int numberOfThreads;
+    private int waitingTime;
+    private int numberOfDays;
 
-    public AirbnbHostCrawler(String url) {
+    public AirbnbHostCrawler(String url, int numberOfDays, int numberOfThreads, int waitingTime) {
         this.driver = new EdgeDriver();
         this.wait = new WebDriverWait(driver, Duration.ofSeconds(10));
         url.trim();
         this.url = url;
+        this.numberOfThreads = numberOfThreads;
+        this.waitingTime = waitingTime;
+        this.numberOfDays = numberOfDays;
     }
 
     public void crawl() throws InterruptedException { // tady se bude nachazet logika prohledavani stranky hostitele
@@ -132,7 +138,7 @@ public class AirbnbHostCrawler {
 
 
         WebElement showAllButton = null;
-        ExecutorService executor = Executors.newFixedThreadPool(6);//POCET VLAKEN
+        ExecutorService executor = Executors.newFixedThreadPool(numberOfThreads);//POCET VLAKEN
 
         try { //v tomto try catch bloku proverime, zda bude najdene tlacitko, ktere otevira vsechny nabidky; pokud ne, tak pracujeme
             // ryze s tim, co je na strance uzivatele
@@ -170,7 +176,26 @@ public class AirbnbHostCrawler {
                     String title = card.findElement(By.cssSelector("[data-testid='listing-card-title']")).getText();
                     String href = card.findElement(By.cssSelector("a[href*='/rooms/']")).getAttribute("href");
 
-                    Listing listing = new Listing(title);
+                    Listing listing = new Listing(title);//vytvarime listing
+                    listing.setUrl(href);
+                    // Hodnocení a počet recenzí nabidky
+                    try {
+                        WebElement ratingSpan = card.findElement(By.xpath(".//span[@aria-hidden='true' and contains(text(), '(')]"));
+                        String ratingText = ratingSpan.getText(); // např. "4,63 (17)"
+                        String[] parts = ratingText.split("[\\s\\(\\)]"); // ["4,63", "", "17", ""]
+
+                        String ratingStr = parts[0].replace(',', '.');  // změna čárky na tečku
+                        double rating = Double.parseDouble(ratingStr);
+                        int reviewsCount = Integer.parseInt(parts[2]);
+
+                        listing.setRating(rating);
+                        listing.setReviewCount(reviewsCount);
+                    } catch (NoSuchElementException e) {
+                        listing.setRating(0.0);
+                        listing.setReviewCount(0);
+                    }
+
+
                     listings.add(listing);
                     listing.setHost(host);
 
@@ -435,26 +460,26 @@ public class AirbnbHostCrawler {
             }
 
 
-            // Тут позже будет логика парсинга
+            // Nastavujeme daty pro crawling
             DateTimeFormatter formatter = DateTimeFormatter.ofPattern("d. M. yyyy");
             LocalDate startDate = LocalDate.now().plusDays(1); // Zitra
-            LocalDate endDate = startDate.plusDays(100);//v production ready verzi je potreba nastavit 365
-
+            LocalDate endDate = startDate.plusDays(numberOfDays);//v production ready verzi je potreba nastavit 365
+            //tady prochazime kazdem datem
             for (LocalDate checkInDate = startDate; checkInDate.isBefore(endDate); checkInDate = checkInDate.plusDays(1)) {
                 LocalDate checkOutDate = checkInDate.plusDays(1);
                 String checkInStr = checkInDate.format(formatter);
                 String checkOutStr = checkOutDate.format(formatter);
 
                 try {
-                    boolean success = setDates(driver, checkInStr, checkOutStr);
+                    boolean success = setDates(driver, checkInStr, checkOutStr); //pokud nastaveni data bylo uspesne, pookracujeme
 
 
                     if (!success) {
                         System.out.println("Preskocili jsme datum: " + checkInStr);
                         listing.addPrice(new Listing.Price(java.sql.Date.valueOf(checkInDate), -1));
-                        continue; // идем к следующей дате
+                        continue; // pokud nastaveni bylo neuspesne, jdema dal
                     }
-                    Thread.sleep(1500); //!!!ČEKÁNÍ NA ODPOVĚĎ SERVERU!!! TODO: UDĚLEJ NASTAVITELNÝ ČAS
+                    Thread.sleep(waitingTime); //!!!ČEKÁNÍ NA ODPOVĚĎ SERVERU!!!
 
                     // Hledame <span>, jenz obsahuje cenu za noc
                     String priceText = (String) ((JavascriptExecutor) driver).executeScript(
@@ -480,20 +505,20 @@ public class AirbnbHostCrawler {
                     System.out.println("Cena za 1 noc: " + priceText);
 
 
-                    if (priceText == null) {
+                    if (priceText == null) { // pokud cena null, jdeme dal
                         System.out.println("Nepodarilo se ziskat cenu pro datum: " + checkInStr);
                         continue;
                     }
 
-// Парсим цену
+// parsovani ceny do listingu, pokud byla nalezena
                     Pattern pattern = Pattern.compile("(\\d+[\\.,]?\\d*)");
                     Matcher matcher = pattern.matcher(priceText);
                     if (matcher.find()) {
                         double pricePerNight = Double.parseDouble(matcher.group(1).replace(",", "."));
                         listing.addPrice(new Listing.Price(java.sql.Date.valueOf(checkInDate), pricePerNight));
-                        System.out.println("Дата " + checkInStr + " обработана, цена: " + pricePerNight);
+                        System.out.println("Datum byl uspesne ulozen: " + checkInStr + " , cena: " + pricePerNight);
                     } else {
-                        System.out.println("Не удалось распарсить цену из JS текста: " + priceText);
+                        System.out.println("Nepodarilo se parsovani data z JS: " + priceText);
                     }
 
                     System.out.println("Datum byl uspesne zpracovan: " + checkInStr + " → " + checkOutStr);
@@ -513,7 +538,7 @@ public class AirbnbHostCrawler {
     }
 
 
-    public void clickCalendar(WebDriver driver) {
+    public void clickCalendar(WebDriver driver) { //pomocna metoda clickajici po tlacitku check-inu, abychom otevrili kalendar
         WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(10));
 
         try {
@@ -521,13 +546,13 @@ public class AirbnbHostCrawler {
                     By.cssSelector("[data-testid='change-dates-checkIn']")
             ));
 
-            // Прокрутка к элементу перед кликом
+            // scrollujeme k elementu, ktery chceme clicknout
             ((JavascriptExecutor) driver).executeScript("arguments[0].scrollIntoView({behavior: 'instant', block: 'center'});", calendarToggle);
             Thread.sleep(300); // немножко подождать после скролла
 
             calendarToggle.click();
 
-            // Ждём, пока появится сам календарь
+            // cekame, az se ibjevi kalendar
             wait.until(ExpectedConditions.visibilityOfElementLocated(
                     By.cssSelector("[data-testid='bookit-sidebar-availability-calendar']")
             ));
@@ -537,19 +562,19 @@ public class AirbnbHostCrawler {
         } catch (ElementClickInterceptedException e) {
             System.out.println("⚠ Nepodarilo se  clicknout na element kalendare - datum neni dostupny");
         } catch (Exception e) {
-            System.out.println("⚠ Chyba pri pokusu otevreni kalendare: " + e.getMessage());
+            System.out.println("⚠ Chyba pri pokusu otevreni kalendare, nejspise kvuli nizke cekaci lhute: " + e.getMessage());
         }
     }
 
 
-    public boolean setDates(WebDriver driver, String checkIn, String checkOut) {
+    public boolean setDates(WebDriver driver, String checkIn, String checkOut) {//pomocna metoda nastaveni data
         WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(3));
         try {
-            clickCalendar(driver);
+            clickCalendar(driver);//zkousime clicknout na kalendar
         } catch (Exception ignored) {
         }
         try {
-            // чек-ин
+            // check in
             WebElement checkInInput = wait.until(ExpectedConditions.elementToBeClickable(By.id("checkIn-book_it")));
             checkInInput.click();
             checkInInput.sendKeys(Keys.CONTROL + "a");
@@ -560,7 +585,7 @@ public class AirbnbHostCrawler {
             if (isDateUnavailable(driver)) {
                 return false;
             }
-            // чек-аут
+            // check out
             WebElement checkOutInput = wait.until(ExpectedConditions.elementToBeClickable(By.id("checkOut-book_it")));
             checkOutInput.click();
             checkOutInput.sendKeys(Keys.CONTROL + "a");
@@ -579,7 +604,7 @@ public class AirbnbHostCrawler {
         }
     }
 
-    private boolean isDateUnavailable(WebDriver driver) {
+    private boolean isDateUnavailable(WebDriver driver) { // pomocna metoda hledajici label jenz ukazuje na nedostupnost data
         try {
             WebElement errorDiv = driver.findElement(By.id("book_it_dateInputsErrorId"));
             return errorDiv.isDisplayed();
