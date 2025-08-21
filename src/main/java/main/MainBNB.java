@@ -111,6 +111,13 @@ public class MainBNB {
                     System.exit(0);
                 }
                 try {
+                    System.out.println("Napiste prosim zpusob ulozeni. 1 = obycejny(name-url-prices), jine cislo = extended(name-url-dscription-amenities-prises)");
+                    savingMode = scanner.nextInt();
+                } catch (Exception e) {
+                    System.out.println("Bylo uvedeno spatne cislo.");
+                    System.exit(0);
+                }
+                try {
                     AirbnbPriceCrawler crawlerPrice = new AirbnbPriceCrawler(numberOfThreads, numberOfDays, waitingPeriod);
                     crawlerPrice.crawl(url1);
                     if (savingMode == 1) {
