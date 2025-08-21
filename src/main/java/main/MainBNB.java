@@ -57,7 +57,7 @@ public class MainBNB {
                 }
                 try {
                     System.out.println("Napiste prosim pocet dnu pro crawling.");
-                    waitingPeriod = scanner.nextInt();
+                    numberOfDays = scanner.nextInt();
                 } catch (Exception e) {
                     System.out.println("Bylo uvedeno spatne cislo.");
                     System.exit(0);
@@ -85,14 +85,22 @@ public class MainBNB {
             default:
                 System.out.println("Prosim zadejte odkaz na stranku, kterou chcete skenovat");
                 String url1 = scanner.nextLine();
-                 numberOfThreads = 6;
-                 waitingPeriod = 1500;
-                 savingMode = 1;
+                numberOfThreads = 6;
+                waitingPeriod = 1500;
+                savingMode = 1;
+                numberOfDays = 365;
                 try {
                     System.out.println("Napiste prosim pocet vlaken. Idealni cislo je 6.");
                     numberOfThreads = scanner.nextInt();
                 } catch (Exception e) {
                     System.out.println("Byl uveden spatny pocet vlaken.");
+                    System.exit(0);
+                }
+                try {
+                    System.out.println("Napiste prosim pocet dnu pro crawling.");
+                    numberOfDays = scanner.nextInt();
+                } catch (Exception e) {
+                    System.out.println("Bylo uvedeno spatne cislo.");
                     System.exit(0);
                 }
                 try {
@@ -103,7 +111,14 @@ public class MainBNB {
                     System.exit(0);
                 }
                 try {
-                    AirbnbPriceCrawler crawlerPrice = new AirbnbPriceCrawler(numberOfThreads, waitingPeriod);
+                    System.out.println("Napiste prosim pocet dnu pro crawling.");
+                    numberOfDays = scanner.nextInt();
+                } catch (Exception e) {
+                    System.out.println("Bylo uvedeno spatne cislo.");
+                    System.exit(0);
+                }
+                try {
+                    AirbnbPriceCrawler crawlerPrice = new AirbnbPriceCrawler(numberOfThreads, numberOfDays, waitingPeriod);
                     crawlerPrice.crawl(url1);
                     if (savingMode == 1) {
                         jsonToExcel.jsonToExcelForPrices("airbnb_results.json");
@@ -114,7 +129,6 @@ public class MainBNB {
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
-
 
 
         }

@@ -27,11 +27,13 @@ public class AirbnbPriceCrawler {
     private WebDriverWait wait;
     private int waitingPeriod;
     private int numberOfThreads;
+    private int numberOfDays;
 
-    public AirbnbPriceCrawler(int numberOfThreads, int waitingPeriod) {
+    public AirbnbPriceCrawler(int numberOfThreads, int numberOfDays, int waitingPeriod) {
         this.driver = new EdgeDriver();
         this.wait = new WebDriverWait(driver, Duration.ofSeconds(10));
         this.waitingPeriod = waitingPeriod;
+        this.numberOfDays = numberOfDays;
         this.numberOfThreads = numberOfThreads;
     }
 
@@ -107,7 +109,6 @@ public class AirbnbPriceCrawler {
             }
 
         }
-
 
 
         // Ukladame vysledek do JSON
@@ -287,7 +288,7 @@ public class AirbnbPriceCrawler {
             // Тут позже будет логика парсинга
             DateTimeFormatter formatter = DateTimeFormatter.ofPattern("d. M. yyyy");
             LocalDate startDate = LocalDate.now().plusDays(1); // Zitra
-            LocalDate endDate = startDate.plusDays(100);//v production ready verzi je potreba nastavit 365
+            LocalDate endDate = startDate.plusDays(numberOfDays);//v production ready verzi je potreba nastavit 365
 
             for (LocalDate checkInDate = startDate; checkInDate.isBefore(endDate); checkInDate = checkInDate.plusDays(1)) {
                 LocalDate checkOutDate = checkInDate.plusDays(1);
@@ -303,7 +304,7 @@ public class AirbnbPriceCrawler {
                         listing.addPrice(new Listing.Price(java.sql.Date.valueOf(checkInDate), -1));
                         continue; // идем к следующей дате
                     }
-                    Thread.sleep(1500); //!!!ČEKÁNÍ NA ODPOVĚĎ SERVERU!!! TODO: UDĚLEJ NASTAVITELNÝ ČAS
+                    Thread.sleep(waitingPeriod); //!!!ČEKÁNÍ NA ODPOVĚĎ SERVERU!!! TODO: UDĚLEJ NASTAVITELNÝ ČAS
 
                     // Hledame <span>, jenz obsahuje cenu za noc
                     String priceText = (String) ((JavascriptExecutor) driver).executeScript(
